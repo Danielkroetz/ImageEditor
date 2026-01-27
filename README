@@ -1,0 +1,10 @@
+# prepare Debian  system
+sudo apt install qt6-base-dev qt6-base-dev-tools libqt6core6 libqt6gui6 libqt6widgets6
+
+# create build dir
+mkdir build
+cd build
+
+# compile with
+cmake .. -DQT_FEATURE_vulkan=OFF
+cmake --build .

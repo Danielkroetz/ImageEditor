@@ -1,0 +1,127 @@
+#include "CageWarpCommand.h"
+#include "../layer/LayerItem.h"
+
+#include <iostream>
+
+// ---------------------- JSON ----------------------
+CageWarpCommand::CageWarpCommand( LayerItem* layer,
+           const QVector<QPointF>& before, const QVector<QPointF>& after, const QRectF& rect,
+           int rows, int columns, QUndoCommand* parent )
+    : AbstractCommand(parent),
+      m_layer(layer),
+      m_before(before),
+      m_after(after),
+      m_rect(rect),
+      m_rows(rows),
+      m_columns(columns)
+{
+    m_layerId = layer->id();
+    setText(QString("Cage Warp %1").arg(m_layerId));
+}
+
+// ---------------------- Undo/Redo ----------------------
+void CageWarpCommand::undo()
+{
+  std::cout << "CageWarpCommand::undo() Processing..." << std::endl;
+  {
+    if ( !m_layer ) return;
+    // Cage auf Startposition zurücksetzen
+    CageMesh mesh = m_layer->cageMesh();
+    mesh.setPoints(m_before);
+    // m_layer->cageMesh().setPoints(m_before);
+    // Triangle Warp auf Bild anwenden
+    m_layer->applyTriangleWarp();
+  }
+}
+
+void CageWarpCommand::redo()
+{
+  std::cout << "CageWarpCommand::redo() Processing..." << std::endl;
+  {
+    if ( !m_layer ) return;
+    // Cage auf Endposition setzen
+    CageMesh mesh = m_layer->cageMesh();
+    mesh.setPoints(m_after);
+    // m_layer->cageMesh().setPoints(m_after);
+    // Triangle Warp auf Bild anwenden
+    m_layer->applyTriangleWarp();
+  }
+}
+
+// ---------------------- JSON ----------------------
+QJsonObject CageWarpCommand::toJson() const
+{
+   QJsonObject obj = AbstractCommand::toJson();
+   obj["layerId"] = m_layerId;
+   obj["type"] = "CageWarp";
+   obj["rows"] = m_rows;
+   obj["columns"] = m_columns;
+   obj["interpolation"] = m_interpolation;
+   QJsonArray cageBeforeObj;
+    for ( const QPointF &p : m_before ) {
+     QJsonObject pointObj;
+     pointObj.insert("x", p.x());
+     pointObj.insert("y", p.y());
+     cageBeforeObj.append(pointObj);
+    }
+   obj.insert("cagepoints_before", cageBeforeObj);
+   QJsonArray cageAfterObj;
+    for ( const QPointF &p : m_after ) {
+     QJsonObject pointObj;
+     pointObj.insert("x", p.x());
+     pointObj.insert("y", p.y());
+     cageAfterObj.append(pointObj);
+    }
+   obj.insert("cagepoints_after", cageAfterObj);
+   QRectF bounds = m_layer->boundingRect();
+   QJsonObject rectObj;
+    rectObj.insert("x", bounds.x());
+    rectObj.insert("y", bounds.y());
+    rectObj.insert("width", bounds.width());
+    rectObj.insert("height", bounds.height());
+   obj["rect"] = rectObj;
+   return obj;
+}
+
+CageWarpCommand* CageWarpCommand::fromJson( const QJsonObject& obj, const QList<LayerItem*>& layers, QUndoCommand* parent )
+{
+  std::cout << "CageWarpCommand::fromJson(): Processing..." << std::endl;
+  {
+    // Layer
+    const int layerId = obj["layerId"].toInt(-1);
+    LayerItem* layer = nullptr;
+    for ( LayerItem* l : layers ) {
+        if ( l->id() == layerId ) {
+            layer = l;
+            break;
+        }
+    }
+    if ( !layer ) {
+      qWarning() << "CageWarpCommand::fromJson(): Layer " << layerId << " not found.";
+      return nullptr;
+    }
+    int rows = obj["rows"].toInt(-1);
+    int columns = obj["columns"].toInt(-1);
+    // before
+    QVector<QPointF> before;
+    QJsonArray before_pts = obj["before"].toArray();
+    before.reserve(before_pts.size());
+    for ( const QJsonValue& v : before_pts ) {
+        QJsonObject po = v.toObject();
+        before.emplace_back(po["x"].toDouble(), po["y"].toDouble());
+    }
+    // after
+    QVector<QPointF> after;
+    QJsonArray after_pts = obj["after"].toArray();
+    after.reserve(after_pts.size());
+    for ( const QJsonValue& v : after_pts ) {
+        QJsonObject po = v.toObject();
+        after.emplace_back(po["x"].toDouble(), po["y"].toDouble());
+    }
+    // Rect
+    QJsonObject r = obj["rect"].toObject();
+    QRectF rect(r["x"].toDouble(),r["y"].toDouble(),r["width"].toInt(),r["height"].toInt());
+    // create
+    return new CageWarpCommand(layer,before,after,rect,rows,columns);
+  }
+}

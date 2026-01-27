@@ -1,0 +1,1102 @@
+#include "MainWindow.h"
+#include "ImageView.h"
+
+#include "../core/ImageLoader.h"
+#include "../core/ImageProcessor.h"
+
+#include "../layer/LayerItem.h"
+#include "../undo/AbstractCommand.h"
+#include "../undo/PaintStrokeCommand.h"
+#include "../undo/TransformLayerCommand.h"
+#include "../undo/LassoCutCommand.h"
+#include "../undo/MirrorLayerCommand.h"
+#include "../undo/MoveLayerCommand.h"
+#include "../undo/CageWarpCommand.h"
+
+#ifdef HASITK
+ #include <itkImage.h>
+ #include <itkImageFileReader.h>
+ #include <itkRescaleIntensityImageFilter.h>
+#endif 
+
+#include <QJsonDocument>
+#include <QApplication>
+#include <QJsonArray>
+#include <QMenuBar>
+#include <QToolBar>
+#include <QStatusBar>
+#include <QAction>
+#include <QHBoxLayout>
+#include <QFileDialog>
+#include <QLabel>
+#include <QPixmap>
+#include <QPainter>
+#include <QComboBox>
+#include <QSpinBox>
+#include <QSlider>
+#include <QPushButton>
+#include <QDockWidget>
+#include <QColorDialog>
+#include <QInputDialog>
+#include <QDateTime>
+#include <QLineEdit>
+#include <QBuffer>
+
+#include <iostream>
+
+/* ============================================================
+ * Checkerboard
+ * ============================================================ */
+static QBrush createCheckerBrush( int tileSize=16, QColor c1=QColor("#3a3a3a"), QColor c2=QColor("#2a2a2a") ) {
+    QPixmap pix(tileSize*2,tileSize*2);
+    pix.fill(c1);
+    QPainter p(&pix);
+    p.fillRect(QRect(0, 0, tileSize, tileSize), c2);
+    p.fillRect(QRect(tileSize, tileSize, tileSize, tileSize), c2);
+    p.end();
+    return QBrush(pix);
+}
+
+/* ============================================================
+ * Constructor
+ * ============================================================ */
+MainWindow::MainWindow( const QString& imagePath, const QString& historyPath, bool useVulkan, QWidget* parent )
+    : QMainWindow(parent)
+{
+  std::cout << "MainWindow::MainWindow(): imagePath=" << imagePath.toStdString() << ", projectPath=" << historyPath.toStdString() << std::endl;
+  {
+    // setup Gimp style
+    // QCoreApplication::setAttribute(Qt::AA_UseStyleSheetPropagationInWidgetStyles);
+    QApplication::setStyle("Fusion");
+    qApp->setStyleSheet(R"(
+      QMainWindow { background-color: #2a2a2a; }
+      QWidget { color: #e0e0e0; background-color: #2a2a2a; }
+      QToolBar { background-color: #303030; border-bottom: 1px solid #1e1e1e; spacing: 4px; }
+      QToolBar::separator { background-color: #a0a0a0; width: 1px; height: 8px; }
+      QToolButton { background-color: #3a3a3a; border: 1px solid #1e1e1e; padding: 4px; }
+      QToolButton:hover { background-color: #505050; }
+      QToolButton:checked { background-color: #6a6a6a; border: 1px solid #909090; font-weight: bold; }
+      QToolButton:checked:hover { background-color: #7a7a7a; }
+      QStatusBar { background-color: #303030; border-top: 1px solid #1e1e1e; }
+      QStatusBar QLabel { color: #e0e0e0; }
+      QSlider::groove:horizontal { height: 4px; background: #1e1e1e; }
+      QSlider::handle:horizontal { width: 10px; background: #707070; margin: -4px 0; }
+      QComboBox { background-color: #3a3a3a; border: 1px solid #1e1e1e; padding: 3px; }
+      QComboBox QAbstractItemView { background-color: #2a2a2a; selection-background-color: #505050; }
+    )");
+    setWindowTitle("Image Viewer - "+imagePath);
+
+    // >>>
+    m_imageView = new ImageView(this);
+    m_imageView->setStyleSheet("QGraphicsView { border: none; }");
+    QGraphicsScene *scene = m_imageView->getScene();
+    scene->setBackgroundBrush(createCheckerBrush());
+    m_imageView->setScene(scene);
+    setCentralWidget(m_imageView);
+
+    // >>>
+    createActions();
+    createToolbars();
+    createStatusbar();
+    createDockWidgets();
+
+    // >>>
+    if ( !imagePath.isEmpty() && historyPath.isEmpty() ) {
+     loadImage(imagePath);
+    } else if ( imagePath.isEmpty() && !historyPath.isEmpty() ) {
+     loadProject(historyPath, false);
+    } else if ( !imagePath.isEmpty() && !historyPath.isEmpty() ) {
+     loadImage(imagePath);
+     loadProject(historyPath, true);
+    }
+  }    
+}
+
+// ---------------------- Load and Save ----------------------
+// -> m_imageView->getScene()->addItem(m_layerItem);
+bool MainWindow::loadImage( const QString& filePath )
+{
+  std::cout << "MainWindow::loadImage(): filePath=" << filePath.toStdString() << std::endl;
+  {
+    ImageLoader loader;
+    if ( !loader.load(filePath) ) {
+      qInfo() << "Warning: Could not load main image " << filePath;
+      return false;
+    }
+    auto* scene = m_imageView->getScene();
+    scene->clear();
+    // main image = regular layer
+    m_layerItem = new LayerItem(loader.getPixmap());
+    m_layerItem->setFileInfo(filePath);
+    m_layerItem->setType(LayerItem::MainImage);
+    scene->addItem(m_layerItem);
+    // set scene size
+    scene->setSceneRect(m_layerItem->boundingRect());
+    // center
+    m_imageView->centerOn(m_layerItem);
+    // create main image layer
+    rebuildLayerList();
+    // ready
+    return true;
+  }
+}
+
+void MainWindow::openImage()
+{
+    bool isMaskImage = sender() == m_openMaskImageAction ? true : false;
+    QString title = isMaskImage ? QString("Open mask image") : QString("Open image");
+    QString fileName = QFileDialog::getOpenFileName(this,
+                        title, QString(),
+                        tr("Images (*.png *.jpg *.bmp)"));
+    if ( fileName.isEmpty() )
+      return;
+    QPixmap pix(fileName);
+    if ( !pix.isNull() ) {
+      if ( isMaskImage ) {
+       m_imageView->loadMaskImage(fileName);
+      } else {
+        m_layerItem = new LayerItem(pix);
+        m_imageView->getScene()->addItem(m_layerItem);
+      }
+    }
+}
+
+void MainWindow::saveAsImage()
+{
+    bool isMaskImage = sender() == m_saveMaskImageAction ? true : false;
+    QString title = isMaskImage ? QString("Save Mask Image As") : QString("Open Image As");
+    QString fileName = QFileDialog::getSaveFileName(this,
+                        title, QString(),
+                        tr("PNG Image (*.png)"));
+    if ( fileName.isEmpty() )
+        return;
+    // save first main image layer
+    if ( isMaskImage ) {
+     m_imageView->saveMaskImage(fileName);
+    } else {
+     if ( !m_imageView->getScene()->items().isEmpty() ) {
+        auto* layer = dynamic_cast<LayerItem*>(m_imageView->getScene()->items().first());
+        if ( layer )
+         layer->image().save(fileName);
+     }
+    }
+}
+
+// --------------------------- History ---------------------------
+void MainWindow::saveHistory()
+{
+    QString fileName = QFileDialog::getSaveFileName(this,
+                        tr("Save History File As"),QString(),tr("JSON file (*.json)"));
+    if ( !fileName.isEmpty() ) {
+     saveProject(fileName);
+    }
+}
+
+bool MainWindow::saveProject( const QString& filePath )
+{
+    QJsonObject root;
+    QUndoStack* undoStack = m_imageView->undoStack();
+    
+    QJsonArray layerArray;
+    // --- Main Layer ---
+    if ( m_layerItem != nullptr ) {
+     QJsonObject mainObj;
+     mainObj["id"] = "0";
+     mainObj["name"] = m_layerItem->name();
+     QFileInfo fileInfo(m_layerItem->filename());
+     mainObj["filename"] = fileInfo.fileName();
+     mainObj["pathname"] = fileInfo.absolutePath();
+     mainObj["md5checksum"] = m_layerItem->checksum();
+     mainObj["filetime"] = fileInfo.lastModified().toString("yyyy-MM-dd HH:mm:ss");
+     if ( m_saveImageDataInProjectFile ) {
+      QByteArray ba;
+      QBuffer buffer(&ba);
+      buffer.open(QIODevice::WriteOnly);
+      m_layerItem->originalImage().save(&buffer,"PNG");
+      mainObj["data"] = QString::fromUtf8(ba.toBase64());
+     }
+     layerArray.append(mainObj);
+    }
+    // --- 1. Layers ---
+    const auto& layers = m_imageView->layers();
+    for ( int i = layers.size()-1; i >= 0; --i ) {
+        Layer* layer = layers[i];
+        if ( !layer || !layer->m_item ) continue;
+        QJsonObject layerObj;
+        layerObj["id"] = layer->id();
+        layerObj["name"] = layer->name();
+        // Image -> Base64
+        if ( layer->id() != 0 ) {
+         QByteArray ba;
+         QBuffer buffer(&ba);
+         buffer.open(QIODevice::WriteOnly);
+         layer->m_image.save(&buffer, "PNG");
+         layerObj["data"] = QString::fromUtf8(ba.toBase64());
+        }
+        layerObj["opacity"] = layer->opacity();
+        layerArray.append(layerObj);
+    }
+    root["layers"] = layerArray;
+
+    // --- 3. Undo/Redo Stack ---
+    QJsonArray undoArray;
+    for ( int i = 0; i < undoStack->count(); ++i ) {
+        auto* cmd = dynamic_cast<const AbstractCommand*>(undoStack->command(i));
+        if ( !cmd ) continue;
+        undoArray.append(cmd->toJson());
+    }
+    root["undoStack"] = undoArray;
+
+    // --- 4. Write JSON to file ---
+    QFile f(filePath);
+    if (!f.open(QIODevice::WriteOnly)) return false;
+    f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    f.close();
+    return true;
+}
+
+bool MainWindow::loadProject( const QString& filePath, bool skipMainImage )
+{
+  std::cout << "MainWindow::loadProject(): filename=" << filePath.toStdString() << ", skipMainImage=" << skipMainImage << std::endl;
+  {
+    QFile f(filePath);
+    if ( !f.open(QIODevice::ReadOnly) ) return false;
+    QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    if ( !doc.isObject() ) return false;
+    QJsonObject root = doc.object();
+    
+    // --- 1. Clear current scene ---
+// **** THIS clears everything **** 
+//    m_imageView->getScene()->clear();
+//    m_imageView->clearLayers();
+// **** ---------------------- ****
+    QUndoStack* undoStack = m_imageView->undoStack();
+    undoStack->clear();
+    
+    // --- 2. Parsing layers ---
+    QJsonArray layerArray = root["layers"].toArray();
+    if ( !skipMainImage ) {
+      for ( const QJsonValue& v : layerArray ) {
+        QJsonObject layerObj = v.toObject();
+        QString name = layerObj["name"].toString();
+        int id = layerObj["id"].toInt();
+        if ( id == 0 ) {
+          QString filename = layerObj["filename"].toString();
+          QString pathname = layerObj["pathname"].toString();
+          QString fullfilename = pathname+"/"+filename;
+          if ( !loadImage(fullfilename) ) {
+           qDebug() << "MainWindow::loadProject(): Cannot find '" << fullfilename << "'!";
+          }
+        }
+      }
+    }
+    int nCreatedLayers = 0;
+    for ( const QJsonValue& v : layerArray ) {
+      QJsonObject layerObj = v.toObject();
+      int id = layerObj["id"].toInt();
+      if ( id != 0 ) {
+        QString name = layerObj["name"].toString();
+        if ( layerObj.contains("data") ) {
+         // qDebug() << "MainWindow::loadProject(): Creating new layer " << name << ": id " << id << "...";
+         QString imgBase64 = layerObj["data"].toString();
+         QByteArray ba = QByteArray::fromBase64(imgBase64.toUtf8());
+         QImage image;
+         image.loadFromData(ba,"PNG");
+         // create new layer
+         LayerItem* newLayer = new LayerItem(image);
+         newLayer->setIndex(id);
+         newLayer->setParent(this);
+         newLayer->setUndoStack(m_imageView->undoStack());
+         Layer* layer = new Layer(id,image);
+         layer->m_name = name;
+         layer->m_item = newLayer;
+         newLayer->setLayer(layer);
+         m_imageView->layers().push_back(layer);
+         m_imageView->getScene()->addItem(newLayer);
+         nCreatedLayers += 1;
+        }
+      }
+    }
+    if ( nCreatedLayers > 0 ) {
+      rebuildLayerList();
+    }
+    
+    QList<LayerItem*> layers;
+    for ( auto* item : m_imageView->getScene()->items(Qt::DescendingOrder) ) {
+      auto* layer = dynamic_cast<LayerItem*>(item);
+      if ( layer ) {
+        qDebug() << "MainWindow::loadProject(): Layer " << layer->name() << ", id=" << layer->id();
+        layers << layer;
+      }  
+    }
+
+    // --- 3. Restore Undo/Redo Stack ---
+    QJsonArray undoArray = root["undoStack"].toArray();
+    for ( const QJsonValue& v : undoArray ) {
+        QJsonObject cmdObj = v.toObject();
+        QString type = cmdObj["type"].toString();
+        QString text = cmdObj["text"].toString();
+        // qDebug() << "MainWindow::loadProject(): Found undo call: type=" << type << ", text=" << text;
+        AbstractCommand* cmd = nullptr;
+        if ( type == "PaintStrokeCommand" ) {
+           cmd = PaintStrokeCommand::fromJson(cmdObj, layers);
+        } else if ( type == "LassoCutCommand" ) {
+           cmd = LassoCutCommand::fromJson(cmdObj, layers);
+        } else if ( type == "MoveLayer" ) {
+           cmd = MoveLayerCommand::fromJson(cmdObj, layers);
+        } else if ( type == "MirrorLayer" ) {
+           cmd = MirrorLayerCommand::fromJson(cmdObj, layers);
+        } else if ( type == "CageWarp" ) {
+           cmd = CageWarpCommand::fromJson(cmdObj, layers);
+        } else if ( type == "TransformLayerCommand" ) {
+           cmd = TransformLayerCommand::fromJson(cmdObj, layers);
+        } else {
+           qDebug() << "MainWindow::loadProject(): Not yet processed.";
+        }
+        // ggf. weitere Command-Typen hier hinzufügen
+        if ( cmd )
+            undoStack->push(cmd);
+    }
+    
+    return true;
+  }
+}
+
+void MainWindow::loadHistory( const QString& file )
+{
+    QFile f(file);
+    if ( !f.open(QIODevice::ReadOnly) )
+        return;
+    QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    QJsonArray arr = doc.array();
+    m_imageView->undoStack()->clear();
+    for ( const auto& v : arr ) {
+        auto* cmd = AbstractCommand::fromJson(v.toObject(),m_imageView);
+        if ( !cmd ) continue;
+        m_imageView->undoStack()->push(cmd);
+    }
+}
+
+void MainWindow::openHistory()
+{
+    QString fileName = QFileDialog::getOpenFileName(this,
+                        tr("Open JSON history file"), QString(),
+                        tr("JSON file (*,json)"));
+    if ( fileName.isEmpty() )
+      return;
+    loadHistory(fileName);
+}
+
+// ---------------------- Mask Image ----------------------
+void MainWindow::createMaskImage()
+{
+    LayerItem* item = m_imageView->baseLayer();
+    if ( item ) {
+      m_imageView->createMaskLayer(item->image().size());
+    }
+}
+
+// ---------------------- Create ----------------------
+void MainWindow::createDockWidgets() 
+{
+   // layer dock
+   m_layerDock = new QDockWidget("Layers", this);
+   m_layerDock->setAllowedAreas(Qt::RightDockWidgetArea);
+   m_layerList = new QListWidget(m_layerDock);
+   m_layerList->setSelectionMode(QAbstractItemView::SingleSelection);
+   m_layerList->setDragDropMode(QAbstractItemView::InternalMove);
+   m_layerList->setDefaultDropAction(Qt::MoveAction);
+   m_layerDock->setWidget(m_layerList);
+   m_layerDock->hide();
+   addDockWidget(Qt::RightDockWidgetArea, m_layerDock);
+   for ( Layer* layer : m_imageView->layers() ) {
+    QListWidgetItem* item = new QListWidgetItem(layer->name(), m_layerList);
+    item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+    item->setCheckState(layer->m_visible ? Qt::Checked : Qt::Unchecked);
+    QIcon eyeIcon(layer->m_visible ? ":/icons/eye_open.png" : ":/icons/eye_closed.png");
+    item->setIcon(eyeIcon);
+   }
+   connect(m_layerList, &QListWidget::itemChanged, this, &MainWindow::toggleLayerVisibility);
+   connect(m_imageView, &ImageView::layerAdded, this, &MainWindow::rebuildLayerList);
+   connect(m_imageView, &ImageView::lassoLayerAdded, this, &MainWindow::newLassoLayerCreated);
+   // Reihenfolge Drag & Drop → Scene aktualisieren
+   connect(m_layerList->model(), &QAbstractItemModel::rowsMoved, [this]() {
+     const int count = m_layerList->count();
+     for ( int i=0 ; i<count ; ++i ) {
+       QListWidgetItem* item = m_layerList->item(i);
+       Layer* layer = static_cast<Layer*>(item->data(Qt::UserRole).value<void*>());
+       if ( layer && layer->m_item ) {
+         layer->m_item->setZValue(count - i); // oberste Layer = höchster Z-Wert
+       }
+     }
+     m_imageView->getScene()->update();
+   });
+   // Kontextmenü für Layer
+   m_layerList->setContextMenuPolicy(Qt::CustomContextMenu);
+   connect(m_layerList, &QListWidget::customContextMenuRequested,this, &MainWindow::showLayerContextMenu);
+   connect(m_layerList, &QListWidget::itemClicked, this, &MainWindow::onLayerItemClicked);
+
+   // history dock
+   m_undoView = new QUndoView(m_imageView->undoStack());
+   m_undoView->setWindowTitle("History");
+   // m_undoView->setAlternatingRowColors(true);
+   m_historyDock = new QDockWidget("Undo History", this);
+   m_historyDock->setWidget(m_undoView);
+   m_historyDock->setAllowedAreas(Qt::RightDockWidgetArea);
+   m_historyDock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
+   addDockWidget(Qt::RightDockWidgetArea, m_historyDock);
+   m_historyDock->setMinimumWidth(200);
+   m_historyDock->hide();
+   connect(m_undoView, &QUndoView::activated, this, [this](const QModelIndex &index){
+     int i = index.row();
+     std::cout << "MainWindow::createDockWidgets(): index=" << i << std::endl;
+     m_imageView->undoStack()->setIndex(i);
+   });
+}
+
+void MainWindow::toggleDocks() 
+{
+  if ( m_historyDock->isVisible() ) m_historyDock->hide();
+  else m_historyDock->show();
+  if ( m_layerDock->isVisible() ) m_layerDock->hide();
+  else m_layerDock->show();
+  
+  qDebug() << "Pixmap items in scene:" << m_imageView->getScene()->items().count();
+  
+}
+
+// --------------------------------- Layer tools ---------------------------------
+void MainWindow::toggleLayerVisibility(  QListWidgetItem* item )
+{
+ std::cout << "MainWindow::toggleLayerVisibility(): Processing..." << std::endl;
+ {
+    if ( !item ) return;
+    if ( m_updatingLayerList ) return; // ⚡ verhindert Rekursion
+    Layer* layer = static_cast<Layer*>(item->data(Qt::UserRole).value<void*>());
+    if ( !layer || !layer->m_item ) return;
+    // Sichtbarkeit umschalten
+    layer->m_visible = !layer->m_visible;
+    layer->m_item->setVisible(layer->m_visible);
+    // Flag setzen, damit wir Änderungen nicht rekursiv triggern
+    m_updatingLayerList = true;
+    // Update Auge-Icon
+    item->setIcon(QIcon(layer->m_visible
+        ? ":/icons/eye_open.png"
+        : ":/icons/eye_closed.png"));
+    // Update CheckState
+    item->setCheckState(layer->m_visible ? Qt::Checked : Qt::Unchecked);
+    m_updatingLayerList = false;
+ }   
+}
+
+void MainWindow::rebuildLayerList()
+{
+  std::cout << "MainWindow::rebuildLayerList(): Rebuild layer list..." << std::endl;
+  {
+    m_updatingLayerList = true;
+    m_layerList->clear();
+    const auto& layers = m_imageView->layers();
+    std::cout << "MainWindow::rebuildLayerList(): nLayers=" << layers.size() << std::endl;
+    for ( int i = layers.size()-1; i >= 0; --i ) {
+        Layer* layer = layers[i];
+        if ( !layer || !layer->m_item ) continue;
+        QListWidgetItem* item = new QListWidgetItem(layer->name());
+        item->setCheckState(layer->m_visible ? Qt::Checked : Qt::Unchecked);
+        item->setData(Qt::UserRole, QVariant::fromValue<void*>(layer));
+        // Auge-Icon
+        item->setIcon(QIcon(layer->m_visible
+            ? ":/icons/eye_open.png"
+            : ":/icons/eye_closed.png"));
+        m_layerList->addItem(item);
+    }
+    m_updatingLayerList = false;
+  }
+}
+
+void MainWindow::layerItemClicked( QListWidgetItem* item )
+{
+    if ( !item ) return;
+    toggleLayerVisibility(item);  // Auge/CheckState
+    // Layer markieren in der Scene
+    Layer* layer = static_cast<Layer*>(item->data(Qt::UserRole).value<void*>());
+    if ( !layer || !layer->m_item ) return;
+    // Alle Items deselektieren
+    for ( Layer* l : m_imageView->layers() ) {
+        if ( l->m_item )
+            l->m_item->setSelected(false);
+    }
+    layer->m_item->setSelected(true);
+}
+
+void MainWindow::onLayerItemClicked( QListWidgetItem* item )
+{
+    if ( !item ) return;
+    void* ptr = item->data(Qt::UserRole).value<void*>();
+    Layer* layer = static_cast<Layer*>(ptr);
+    if ( layer ) {
+     for ( Layer* l : m_imageView->layers() ) {
+       if ( l->m_item ) {
+         l->m_item->setSelected(l == layer ? true : false);
+       }
+     }
+    }
+}
+
+void MainWindow::showLayerContextMenu(const QPoint& pos)
+{
+    QListWidgetItem* item = m_layerList->itemAt(pos);
+    if ( !item ) return;
+    QMenu menu(this);
+    menu.addAction("Delete Layer", this, &MainWindow::deleteLayer);
+    menu.addAction("Duplicate Layer", this, &MainWindow::duplicateLayer);
+    menu.addAction("Rename Layer", this, &MainWindow::renameLayer);
+    menu.addAction("Link to Image", [this, item]() {
+        Layer* layer = static_cast<Layer*>(item->data(Qt::UserRole).value<void*>());
+        if ( !layer ) return;
+        // Layer verknüpfen
+        layer->m_linkedToImage = !layer->m_linkedToImage;
+        // Icon oder Checkmark optional anpassen
+        if ( layer->m_linkedToImage )
+            item->setText(layer->name() + " (linked)");
+        else
+            item->setText(layer->name());
+    });
+    menu.addAction("Center Layer", [this, item]() {
+        Layer* layer = static_cast<Layer*>(item->data(Qt::UserRole).value<void*>());
+        if (!layer) return;
+        m_imageView->centerOnLayer(layer);
+    });
+    menu.addAction("Layer Info", [this, item]() {
+        Layer* layer = static_cast<Layer*>(item->data(Qt::UserRole).value<void*>());
+        if ( !layer || !layer->m_item ) return;
+        QRectF bbox = layer->m_item->boundingRect();
+        int polygonPoints = 0;
+        if ( !layer->m_polygon.isEmpty() )
+            polygonPoints = layer->m_polygon.size();
+        QSize pixmapSize;
+        if ( auto pixmapItem = dynamic_cast<QGraphicsPixmapItem*>(layer->m_item) )
+            pixmapSize = pixmapItem->pixmap().size();
+        qDebug() << "Layer Info:";
+        qDebug() << "Name:" << layer->name();
+        qDebug() << "Visible:" << layer->m_visible;
+        qDebug() << "Linked to Image:" << layer->m_linkedToImage;
+        qDebug() << "Bounding Box:" << bbox;
+        qDebug() << "Polygon Points:" << polygonPoints;
+        if ( !pixmapSize.isEmpty() )
+            qDebug() << "Pixmap Size:" << pixmapSize;
+    });
+    menu.exec(m_layerList->viewport()->mapToGlobal(pos));
+}
+
+void MainWindow::deleteLayer()
+{
+    QListWidgetItem* item = m_layerList->currentItem();
+    if ( !item ) return;
+    Layer* layer = static_cast<Layer*>(item->data(Qt::UserRole).value<void*>());
+    if ( !layer ) return;
+    if ( layer->m_item )
+        m_imageView->getScene()->removeItem(layer->m_item);
+    m_imageView->layers().removeOne(layer);
+    delete layer;
+    rebuildLayerList();
+}
+
+void MainWindow::duplicateLayer()
+{
+  std::cout << "MainWindow::duplicateLayer(): Processing..." << std::endl;
+  {
+    QListWidgetItem* item = m_layerList->currentItem();
+    if ( !item ) return;
+    Layer* layer = static_cast<Layer*>(item->data(Qt::UserRole).value<void*>());
+    if ( !layer || !layer->m_item ) return;
+    Layer* newLayer = new Layer(100);  // !!! WARNING !!!
+    newLayer->m_name = layer->name() + " Copy";
+    newLayer->m_visible = layer->m_visible;
+    newLayer->m_item = m_imageView->getScene()->addPixmap(
+        static_cast<QGraphicsPixmapItem*>(layer->m_item)->pixmap());
+    newLayer->m_item->setPos(layer->m_item->pos());
+    newLayer->m_item->setFlags(QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable);
+    m_imageView->layers().append(newLayer);
+    rebuildLayerList();
+  }
+}
+
+void MainWindow::renameLayer()
+{
+    QListWidgetItem* item = m_layerList->currentItem();
+    if ( !item ) return;
+    Layer* layer = static_cast<Layer*>(item->data(Qt::UserRole).value<void*>());
+    if ( !layer ) return;
+    bool ok;
+    QString newName = QInputDialog::getText(this, "Rename Layer",
+                                            "New name:", QLineEdit::Normal,
+                                            layer->name(), &ok);
+    if ( ok && !newName.isEmpty() ) {
+        layer->m_name = newName;
+        item->setText(newName);
+    }
+}
+
+// --------------------------------- Actions ---------------------------------
+void MainWindow::createActions()
+{
+    m_infoAction = new QAction(tr("Info"), this);
+    connect(m_infoAction, &QAction::triggered, this, &MainWindow::info);
+    
+    m_saveHistoryAction = new QAction(tr("Save history as..."), this);
+    connect(m_saveHistoryAction, &QAction::triggered, this, &MainWindow::saveHistory);
+    
+    m_openHistoryAction = new QAction(tr("Open history file"), this);
+    connect(m_openHistoryAction, &QAction::triggered, this, &MainWindow::openHistory);
+    
+    m_openAction = new QAction(tr("Open"), this);
+    connect(m_openAction, &QAction::triggered, this, &MainWindow::openImage);
+
+    m_saveAsAction = new QAction(tr("Save As"), this);
+    connect(m_saveAsAction, &QAction::triggered, this, &MainWindow::saveAsImage);
+
+    // m_cutAction = new QAction(tr("Cut Selection"), this);
+    // connect(m_cutAction, &QAction::triggered, this, &MainWindow::cutSelection);
+    
+    m_pipetteAction = new QAction("Pipette", this);
+    m_pipetteAction->setCheckable(true);
+    connect(m_pipetteAction, &QAction::toggled, m_imageView, &ImageView::enablePipette);
+    connect(m_pipetteAction, &QAction::toggled, this, &MainWindow::updateButtonState);
+    
+    m_zoom1to1Action = new QAction("1:1", this);
+    connect(m_zoom1to1Action, &QAction::triggered, this, &MainWindow::zoom1to1);
+    m_fitAction      = new QAction("Fit", this);
+    connect(m_fitAction, &QAction::triggered,  this, &MainWindow::fitToWindow);
+    
+    m_crosshairAction = new QAction("Crosshair", this);
+    m_crosshairAction->setCheckable(true);
+    connect(m_crosshairAction, &QAction::toggled, m_imageView, &ImageView::setCrosshairVisible);
+    
+    m_undoAction = m_imageView->undoStack()->createUndoAction(this," Undo ");
+    m_redoAction = m_imageView->undoStack()->createRedoAction(this," Redo ");
+    
+    m_paintAction = new QAction(" Paint", this);
+    m_paintAction->setCheckable(true);
+    connect(m_paintAction, &QAction::toggled, m_imageView, &ImageView::setPaintToolEnabled);
+    connect(m_paintAction, &QAction::toggled, this, &MainWindow::updateButtonState);
+    
+    m_showDockWidgets = new QAction(" Docks", this);
+    m_showDockWidgets->setCheckable(true);
+    connect(m_showDockWidgets, &QAction::toggled, this, &MainWindow::toggleDocks);
+    
+    m_lassoAction = new QAction(" Create", this);
+    m_lassoAction->setCheckable(true);
+    connect(m_lassoAction, &QAction::toggled, m_imageView, &ImageView::setLassoEnabled);
+    connect(m_lassoAction, &QAction::toggled, this, &MainWindow::updateButtonState);
+    
+    // mask image actions
+    m_createMaskImageAction = new QAction(" Create new mask", this);
+    connect(m_createMaskImageAction, &QAction::triggered, this, &MainWindow::createMaskImage);
+    m_openMaskImageAction = new QAction(" Open mask", this);
+    connect(m_openMaskImageAction, &QAction::triggered, this, &MainWindow::openImage);
+    m_saveMaskImageAction = new QAction(" Save mask as...", this);
+    connect(m_saveMaskImageAction, &QAction::triggered, this, &MainWindow::saveAsImage);
+    m_paintMaskImageAction = new QAction("Paint", this);
+    m_paintMaskImageAction->setCheckable(true);
+    m_eraseMaskImageAction = new QAction("Erase", this);
+    m_eraseMaskImageAction->setCheckable(true);
+    connect(m_paintMaskImageAction, &QAction::toggled, this, [=](bool on){
+        if ( on ) m_eraseMaskImageAction->setChecked(false);
+        m_imageView->setMaskTool(on?ImageView::MaskPaint:ImageView::None);
+    });
+    connect(m_eraseMaskImageAction, &QAction::toggled, this, [=](bool on){
+        if ( on ) m_paintMaskImageAction->setChecked(false);
+        m_imageView->setMaskTool(on?ImageView::MaskErase:ImageView::None);
+    });
+    
+    // control actions
+    m_paintControlAction = new QAction("Paint", this);
+    m_paintControlAction->setCheckable(true);
+    m_paintControlAction->setChecked(true);
+    connect(m_paintControlAction, &QAction::toggled, this, &MainWindow::updateControlButtonState);
+    m_maskControlAction = new QAction("Mask", this);
+    m_maskControlAction->setCheckable(true);
+    connect(m_maskControlAction, &QAction::toggled, this, &MainWindow::updateControlButtonState);
+    m_lassoControlAction = new QAction("Free selection", this);
+    m_lassoControlAction->setCheckable(true);
+    connect(m_lassoControlAction, &QAction::toggled, this, &MainWindow::updateControlButtonState);
+    m_polygonControlAction = new QAction("Polygon", this);
+    m_polygonControlAction->setCheckable(true);
+    connect(m_polygonControlAction, &QAction::toggled, this, &MainWindow::updateControlButtonState);
+}
+
+void MainWindow::updateControlButtonState() 
+{
+  bool isA = sender() == m_paintControlAction? 1 : 0;
+  bool isB = sender() == m_lassoControlAction ? 1 : 0;
+  bool isC = sender() == m_maskControlAction ? 1 : 0;
+  bool isD = sender() == m_polygonControlAction ? 1 : 0;
+  // std::cout << "MainWindow::updateControlButtonState(): checked=" << isA << ":" << isB << std::endl;
+  bool paintIsChecked = m_paintControlAction->isChecked();
+  bool lassoIsChecked = m_lassoControlAction->isChecked();
+  bool maskIsChecked = m_maskControlAction->isChecked();
+  bool polygonIsChecked = m_polygonControlAction->isChecked();
+  if ( isA && paintIsChecked && (lassoIsChecked || maskIsChecked || polygonIsChecked ) ) {
+   m_lassoControlAction->setChecked(false);
+   m_maskControlAction->setChecked(false);
+   m_polygonControlAction->setChecked(false);
+   m_polygonToolbar->setVisible(false);
+   m_lassoToolbar->setVisible(false); 
+   m_maskToolbar->setVisible(false);
+  }
+  if ( isB && lassoIsChecked && (paintIsChecked || maskIsChecked || polygonIsChecked) ) {
+   m_paintControlAction->setChecked(false);
+   m_maskControlAction->setChecked(false);
+   m_polygonControlAction->setChecked(false);
+   m_polygonToolbar->setVisible(false);
+   m_editToolbar->setVisible(false);
+   m_maskToolbar->setVisible(false);
+  }
+  if ( isC && maskIsChecked && (paintIsChecked || lassoIsChecked || polygonIsChecked) ) {
+   m_paintControlAction->setChecked(false);
+   m_lassoControlAction->setChecked(false);
+   m_polygonControlAction->setChecked(false);
+   m_polygonToolbar->setVisible(false);
+   m_editToolbar->setVisible(false);
+   m_lassoToolbar->setVisible(false);
+  }
+  if ( isD && polygonIsChecked && (paintIsChecked || lassoIsChecked || maskIsChecked) ) {
+   m_paintControlAction->setChecked(false);
+   m_lassoControlAction->setChecked(false);
+   m_editToolbar->setVisible(false);
+   m_lassoToolbar->setVisible(false);
+  }
+  if ( m_paintControlAction->isChecked() ) {
+   m_editToolbar->setVisible(true);
+  } else if ( m_lassoControlAction->isChecked() ) {
+   m_lassoToolbar->setVisible(true);   
+  } else if ( m_maskControlAction->isChecked() ) {
+   m_maskToolbar->setVisible(true);   
+  } else if ( m_polygonControlAction->isChecked() ) {
+   m_polygonToolbar->setVisible(true);   
+  }
+}
+
+void MainWindow::updateButtonState() 
+{
+    bool isA = sender() == m_pipetteAction? 1 : 0;
+    bool isB = sender() == m_paintAction ? 1 : 0;
+    bool isC = sender() == m_lassoAction ? 1 : 0;
+    bool pipetteIsChecked = m_pipetteAction->isChecked();
+    bool paintIsChecked = m_paintAction->isChecked();
+    bool lassoIsChecked = m_lassoAction->isChecked();
+    if ( isB && m_paintAction->isChecked() && ( pipetteIsChecked || lassoIsChecked ) ) {
+       m_pipetteAction->setChecked(false);
+       m_lassoAction->setChecked(false);
+    }
+    if ( isA && m_pipetteAction->isChecked() && ( paintIsChecked || lassoIsChecked ) ) {
+       m_paintAction->setChecked(false);
+       m_lassoAction->setChecked(false);
+    }
+    if ( isC && m_lassoAction->isChecked() && ( paintIsChecked || pipetteIsChecked ) ) {
+       m_paintAction->setChecked(false);
+       m_pipetteAction->setChecked(false);
+    }
+}
+
+void MainWindow::createToolbars()
+{
+    // ============================================================
+    // create first toolbar
+    // ============================================================
+    QToolBar *fileToolbar = new QToolBar("View",this);
+    fileToolbar->setStyleSheet("QToolBar { background-color:#222222; } QToolButton { color:white; background-color:#222222; }");
+    fileToolbar->setAutoFillBackground(true);
+    fileToolbar->setMovable(false);
+    fileToolbar->setFloatable(false);
+    addToolBar(Qt::TopToolBarArea,fileToolbar);
+    fileToolbar->addAction(m_openAction);
+    fileToolbar->addAction(m_saveAsAction);
+    fileToolbar->addAction(m_zoom1to1Action);
+    fileToolbar->insertSeparator(m_zoom1to1Action);
+    fileToolbar->addAction(m_fitAction);
+    fileToolbar->addAction(m_crosshairAction);
+    // color tables
+    QComboBox* colorTableCombo = new QComboBox();
+    colorTableCombo->addItems({"Original","Invert","Red","Green","Blue"});
+    fileToolbar->addWidget(colorTableCombo);
+    connect(colorTableCombo, &QComboBox::currentTextChanged, m_imageView, [this](const QString& text){
+       QVector<QRgb> lut(256);
+       if (text=="Original") for(int i=0;i<256;i++) lut[i] = qRgb(i,i,i);
+       else if(text=="Invert") for(int i=0;i<256;i++) lut[i] = qRgb(255-i,255-i,255-i);
+       else if(text=="Red") for(int i=0;i<256;i++) lut[i] = qRgb(i,0,0);
+       else if(text=="Green") for(int i=0;i<256;i++) lut[i] = qRgb(0,i,0);
+       else if(text=="Blue") for(int i=0;i<256;i++) lut[i] = qRgb(0,0,i);
+       m_imageView->setColorTable(lut);
+    });
+    fileToolbar->addAction(m_showDockWidgets);
+    fileToolbar->insertSeparator(m_showDockWidgets);
+    fileToolbar->addAction(m_undoAction);
+    fileToolbar->insertSeparator(m_undoAction);
+    fileToolbar->addAction(m_redoAction);
+    fileToolbar->addAction(m_saveHistoryAction);
+    fileToolbar->insertSeparator(m_saveHistoryAction);
+    fileToolbar->addAction(m_openHistoryAction);
+    fileToolbar->addAction(m_infoAction);
+    fileToolbar->insertSeparator(m_infoAction);
+    
+    // ============================================================
+    //  toolbar break
+    // ============================================================
+    addToolBarBreak(Qt::TopToolBarArea);
+    
+    // ============================================================
+    // create second toolbar
+    // ============================================================
+    QToolBar* controlToolbar = addToolBar(tr("Control"));
+    controlToolbar->addAction(m_paintControlAction);
+    controlToolbar->addAction(m_maskControlAction);
+    controlToolbar->addAction(m_lassoControlAction);
+    controlToolbar->addAction(m_polygonControlAction);
+    
+    // ============================================================
+    // create edit toolbar
+    // ============================================================
+    m_editToolbar = addToolBar(tr("Edit"));
+    m_editToolbar->addAction(m_pipetteAction);
+    QLabel* pipetteColorLabel = new QLabel(" Color ");
+    m_editToolbar->addWidget(pipetteColorLabel);
+    QPushButton* pipetteColorButton = new QPushButton();
+    pipetteColorButton->setFixedSize(20,20);
+     QPixmap whitepixmap(20,20); 
+     whitepixmap.fill(Qt::white);
+    pipetteColorButton->setIcon(whitepixmap);
+    pipetteColorButton->setIconSize(QSize(20,20));
+    pipetteColorButton->setFlat(true);
+    connect(pipetteColorButton, &QPushButton::clicked, this, [this,pipetteColorButton](){
+      QColor c = QColorDialog::getColor(Qt::red,this,"Select Brush Color");
+      if( c.isValid() ) {
+       m_imageView->setBrushColor(c);
+       QPixmap pix(20,20); 
+       pix.fill(c); 
+       pipetteColorButton->setIcon(pix);
+      }
+    }); 
+    connect(m_imageView, &ImageView::pickedColorChanged, this, [pipetteColorButton](const QColor& c){
+     QPixmap pix(20,20); 
+     pix.fill(c); 
+     pipetteColorButton->setIcon(pix);
+    });
+    m_editToolbar->addWidget(pipetteColorButton);
+    m_editToolbar->addAction(m_paintAction);
+    // Brush size
+    QLabel* brushLabel = new QLabel(" Brush size:");
+    m_editToolbar->addWidget(brushLabel);
+    QSpinBox* brushSpin = new QSpinBox();
+    brushSpin->setRange(1,50);
+    brushSpin->setValue(5);
+    m_editToolbar->addWidget(brushSpin);
+    connect(brushSpin, QOverload<int>::of(&QSpinBox::valueChanged), m_imageView, &ImageView::setBrushRadius);
+    // Brush hardness
+    QLabel* hardnessLabel = new QLabel(" Hardness:");
+    m_editToolbar->addWidget(hardnessLabel);
+    QSlider* hardnessSlider = new QSlider(Qt::Horizontal);
+    hardnessSlider->setRange(1,100); // 1..100 %
+    hardnessSlider->setValue(100);
+    hardnessSlider->setFixedWidth(80);
+    m_editToolbar->addWidget(hardnessSlider);
+    QLabel* hardnessValueLabel = new QLabel(QString::number(hardnessSlider->value()) + "%");
+    m_editToolbar->addWidget(hardnessValueLabel);
+    connect(hardnessSlider, &QSlider::valueChanged, m_imageView, [this,hardnessValueLabel](int val){
+      m_imageView->setBrushHardness(val/100.0);
+      hardnessValueLabel->setText(QString::number(val) + "%");
+    });
+    
+    // ============================================================
+    // create mask toolbar
+    // ============================================================
+    m_maskToolbar = addToolBar(tr("Mask"));
+    m_maskToolbar->addAction(m_createMaskImageAction);
+    m_maskToolbar->addAction(m_openMaskImageAction);
+    m_maskToolbar->addAction(m_saveMaskImageAction);
+    m_maskToolbar->addAction(m_paintMaskImageAction);
+    m_maskToolbar->addAction(m_eraseMaskImageAction);
+    QLabel* maskIndexLabel = new QLabel(" Mask index:");
+    m_maskToolbar->addWidget(maskIndexLabel);
+    QComboBox* maskIndexBox = new QComboBox();
+    QList<QColor> colors = {
+        Qt::red, Qt::green, Qt::blue, 
+        Qt::cyan, Qt::magenta, Qt::yellow, 
+        Qt::darkRed, Qt::darkGreen, Qt::darkBlue
+    };
+    maskIndexBox->setIconSize(QSize(20, 20));
+    maskIndexBox->setMinimumWidth(110);
+    unsigned int i = 1;
+    for ( const auto& color : colors ) {
+      QPixmap pixmap(24, 24);
+      pixmap.fill(Qt::transparent);
+      QPainter painter(&pixmap);
+       painter.setRenderHint(QPainter::Antialiasing);
+       painter.setBrush(color);
+       painter.setPen(QPen(Qt::black, 1)); // Optionaler dünner Rand
+       painter.drawRoundedRect(2, 2, 20, 20, 4, 4);
+      painter.end();
+      maskIndexBox->addItem(QIcon(pixmap),QString("Label %1").arg(i));
+      i += 1;
+    }
+    connect(maskIndexBox, &QComboBox::currentTextChanged, this, [this](const QString& text){
+      QString numOnly;
+      for( auto c : text ) {
+       if( c.isDigit() ) numOnly.append(c);
+      }
+      m_imageView->setMaskLabel(numOnly.toInt());
+    });
+    m_maskToolbar->addWidget(maskIndexBox);
+    QLabel* maskBrushLabel = new QLabel(" Brush size:");
+    m_maskToolbar->addWidget(maskBrushLabel);
+    QSpinBox* maskBrushSpin = new QSpinBox();
+    maskBrushSpin->setRange(1,50);
+    maskBrushSpin->setValue(5);
+    m_maskToolbar->addWidget(maskBrushSpin);
+    connect(maskBrushSpin, QOverload<int>::of(&QSpinBox::valueChanged), m_imageView, &ImageView::setMaskBrushRadius);
+    QLabel *maskOpacityLabel = new QLabel("Opacity", this);
+    m_maskToolbar->addWidget(maskOpacityLabel);
+    QSlider *maskOpacitySlider = new QSlider(Qt::Horizontal, this);
+    maskOpacitySlider->setRange(0,100); 
+    maskOpacitySlider->setValue(40);  
+    maskOpacitySlider->setFixedWidth(100);
+    connect(maskOpacitySlider, &QSlider::valueChanged, this, [&](int v){
+       m_imageView->setMaskOpacity(v/100.0); // m_maskItem->setOpacityFactor(v / 100.0);
+    });
+    m_maskToolbar->addWidget(maskOpacitySlider);
+    m_maskToolbar->setVisible(false);
+
+    // ============================================================
+    // create lasso toolbar
+    // ============================================================
+    m_lassoToolbar = addToolBar(tr("Lasso"));
+    m_lassoToolbar->addAction(m_lassoAction);
+    // --- layer mask threshold ---
+    QLabel* layerMaskThresholdLabel = new QLabel(" Image threshold:");
+    m_lassoToolbar->addWidget(layerMaskThresholdLabel);
+    QSpinBox* layerMaskThresholdSpin = new QSpinBox();
+    layerMaskThresholdSpin->setRange(0,255);
+    layerMaskThresholdSpin->setValue(0);
+    m_lassoToolbar->addWidget(layerMaskThresholdSpin);
+    // --- Mask image ---
+    QComboBox* applyMaskImageItem = new QComboBox();
+    applyMaskImageItem->addItems({"Ignore mask","Mask labels","Only mask labels"});
+    connect(applyMaskImageItem, &QComboBox::currentTextChanged,this, [this](const QString& text){
+      // std::cout << "applyMaskImageItem(): " << text.toStdString() << std::endl;
+      if ( text.startsWith("Ignore") ) {
+         m_imageView->setMaskCutTool(ImageView::MaskCutTool::Ignore);
+      } else if ( text.startsWith("Mask") ) { 
+         m_imageView->setMaskCutTool(ImageView::MaskCutTool::Mask);
+      } else {
+         m_imageView->setMaskCutTool(ImageView::MaskCutTool::OnlyMask);
+      }
+    });
+    m_lassoToolbar->addWidget(applyMaskImageItem);
+    // --- operation modus ---
+    QComboBox* transformLayerItem = new QComboBox();
+    transformLayerItem->addItems({"Translate","Rotate","Scale","Perspective","Vertical flip","Horizontal flip","Cage transform"});
+    m_lassoToolbar->addWidget(transformLayerItem);
+    connect(transformLayerItem, &QComboBox::currentTextChanged, this, [this](const QString& text){
+      LayerItem::TransformMode transformMode = LayerItem::TransformMode::None;
+      if ( text.startsWith("Translate") ) transformMode = LayerItem::TransformMode::Translate;
+      else if ( text.startsWith("Rotate") ) transformMode = LayerItem::TransformMode::Rotate;
+      else if ( text.startsWith("Scale") ) transformMode = LayerItem::TransformMode::Scale;
+      else if ( text.startsWith("Vertical") ) transformMode = LayerItem::TransformMode::Flip;
+      else if ( text.startsWith("Horizontal") ) transformMode = LayerItem::TransformMode::Flop;
+      else if ( text.startsWith("Cage transform") ) transformMode = LayerItem::TransformMode::CageWarp;
+      m_imageView->setLayerTransformMode(transformMode);
+    });
+    // --- cage control points ---
+    QLabel* cageControlPointsLabel = new QLabel(" Cage control points:");
+    m_lassoToolbar->addWidget(cageControlPointsLabel);
+    m_cageControlPointsSpin = new QSpinBox();
+    m_cageControlPointsSpin->setRange(2,30);
+    m_cageControlPointsSpin->setValue(1);
+    m_lassoToolbar->addWidget(m_cageControlPointsSpin);
+    connect(m_cageControlPointsSpin, QOverload<int>::of(&QSpinBox::valueChanged), m_imageView, &ImageView::setNumberOfCageControlPoints);
+    // --- interpolation ---
+    QComboBox* interpolationLayerItem = new QComboBox();
+    interpolationLayerItem->addItems({"Nearest neighbor interpolation","Trilinear interpolation"});
+    m_lassoToolbar->addWidget(interpolationLayerItem);
+    // --- relaxation ---
+    QLabel* cageRelaxationLabel = new QLabel(" Relaxation:");
+    m_lassoToolbar->addWidget(cageRelaxationLabel);
+    QSpinBox* relaxationSpin = new QSpinBox();
+    relaxationSpin->setRange(0,10);
+    relaxationSpin->setValue(0);
+    m_lassoToolbar->addWidget(relaxationSpin);
+    connect(relaxationSpin, QOverload<int>::of(&QSpinBox::valueChanged), m_imageView, &ImageView::setCageWarpRelaxationSteps);
+    // --- Update for Debugging ---
+    QAction *updateAction = new QAction("Update");
+    connect(updateAction, &QAction::triggered, this, &MainWindow::forcedUpdate);
+    m_lassoToolbar->addAction(updateAction);
+    // --- Finalize ---
+    m_lassoToolbar->setVisible(false);
+    
+    // ============================================================
+    // create polygon toolbar
+    // ============================================================
+    m_polygonToolbar = addToolBar(tr("Polygon"));
+    m_polygonToolbar->setVisible(false);
+    
+}
+
+void MainWindow::createStatusbar()
+{
+	QLabel* scaleLabel = new QLabel(this);
+    QLabel* posLabel   = new QLabel(this);
+    QLabel* cursorColorLabel = new QLabel(this);
+    cursorColorLabel->setFixedSize(24,24);
+    QLabel* cursorColorText = new QLabel(this);
+
+    statusBar()->addPermanentWidget(scaleLabel);
+    statusBar()->addPermanentWidget(posLabel);
+    statusBar()->addPermanentWidget(cursorColorText);
+    statusBar()->addPermanentWidget(cursorColorLabel);
+    
+    connect(m_imageView, &ImageView::scaleChanged, this, [scaleLabel](double scale){
+        scaleLabel->setText(QString("Scale: %1×").arg(scale, 0, 'f', 2));
+    });
+
+    connect(m_imageView, &ImageView::cursorPositionChanged, this, [posLabel](int x, int y){
+        posLabel->setText(QString("|  Pos: %1, %2").arg(x).arg(y));
+    });
+    
+    connect(m_imageView, &ImageView::cursorColorChanged, this, [cursorColorText,cursorColorLabel](const QColor& c){
+        QPixmap pix(24,24); 
+        pix.fill(c); 
+        cursorColorLabel->setPixmap(pix);
+        cursorColorText->setText(QString("|  Color: R:%1 G:%2 B:%3").arg(c.red()).arg(c.green()).arg(c.blue()));
+        cursorColorLabel->setToolTip(QString("R:%1 G:%2 B:%3 A:%4")
+                                 .arg(c.red()).arg(c.green()).arg(c.blue()).arg(c.alpha()));
+    });
+}
+
+void MainWindow::info()
+{
+  qDebug() << "MainWindow::info(): Processing...";
+  {
+    for ( auto* item : m_imageView->getScene()->items(Qt::DescendingOrder) ) {
+      auto* layer = dynamic_cast<LayerItem*>(item);
+      if ( layer ) {
+        // qDebug() << " Layer " << layer->name() << ", id=" << layer->id();
+        layer->printself();
+      }  
+    }
+    m_imageView->printself();
+  }
+}
+
+/* =================== Signal calls =================== */
+void MainWindow::newLassoLayerCreated()
+{
+  m_lassoAction->setChecked(false);
+  rebuildLayerList();
+}
+
+/* =================== View Helpers =================== */
+void MainWindow::cutSelection() { m_imageView->cutSelection(); }
+void MainWindow::zoom1to1() { m_imageView->resetTransform(); }
+void MainWindow::fitToWindow() { m_imageView->fitInView(m_layerItem,Qt::KeepAspectRatio); }
+void MainWindow::forcedUpdate() { m_imageView->forcedUpdate(); }
