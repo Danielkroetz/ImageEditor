@@ -147,12 +147,12 @@ static QJsonObject parser( const QCoreApplication *app, int argc ) {
 // ---------------------- Main ----------------------
 int main( int argc, char *argv[] )
 {
-    // --- prepare ---
+    // --- prepare (required for Linux.Debian systems in batch mode) ---
     if ( getenv("DISPLAY") == nullptr ) {
       setenv("QT_QPA_PLATFORM", "offscreen", 1);
     }
     QImageReader::setAllocationLimit(0); // dangerous
-
+    
     // --- check first for gui option ---
     bool batchProcssing = false;
     for ( int i=0 ; i<argc ; ++i ) {
@@ -200,7 +200,7 @@ int main( int argc, char *argv[] )
         return 0;
        }
       }
-      image.setColorSpace(QColorSpace(QColorSpace::SRgb));
+      image.setColorSpace(QColorSpace(QColorSpace::SRgb)); // no change
       if ( loader.saveAs(image,outputPath) ) {
        qInfo() << "Saved image file '" << outputPath << "'.";
        return 1;

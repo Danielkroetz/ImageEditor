@@ -1,5 +1,7 @@
 #include "ImageLoader.h"
+
 #include <QDebug>
+
 #include <iostream>
 
 // -------------------------- ImageLoader --------------------------
@@ -75,7 +77,7 @@ bool ImageLoader::load( const QString& filePath, bool asImage )
 
 bool ImageLoader::saveAs( const QImage& image, const QString& filePath )
 {
- qDebug() << "ImageLoader::saveAs(): filePath='" << filePath << "': " << image.format(); 
+ qDebug() << "ImageLoader::saveAs(): filePath='" << filePath << "': " << image.format();
  {
   if ( !image.isNull() ) {
     return image.save(filePath);

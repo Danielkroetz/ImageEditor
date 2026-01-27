@@ -37,7 +37,6 @@ public:
     bool isActive() const { return m_active; }
     void setActive( bool );
 
-    
     QPointF originalPoint( int i ) const;
     QPointF point( int i ) const;
 

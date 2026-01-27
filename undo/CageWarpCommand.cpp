@@ -19,6 +19,16 @@ CageWarpCommand::CageWarpCommand( LayerItem* layer,
     setText(QString("Cage Warp %1").arg(m_layerId));
 }
 
+// 
+void CageWarpCommand::pushNewWarpStep( const QVector<QPointF>& points )
+{
+  std::cout << "CageWarpCommand::pushNewWarpStep(): Processing...";
+  {
+    m_after = points;
+    m_steps += 1;
+  }
+}
+
 // ---------------------- Undo/Redo ----------------------
 void CageWarpCommand::undo()
 {

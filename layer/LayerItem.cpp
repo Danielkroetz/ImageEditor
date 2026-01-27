@@ -175,8 +175,6 @@ void LayerItem::setMirror( int mirrorPlane ) {
     #else
      QImage flippedImage = m_image.mirrored(mirrorPlane == 1 ? Qt::Vertical : Qt::Horizontal);
     #endif
-    // QImage flippedImage = m_image.flipped(mirrorPlane == 1 ? Qt::Vertical : Qt::Horizontal);
-    // QImage flippedImage = m_image.mirrored(mirrorPlane == 1, mirrorPlane != 1);
     m_image = flippedImage;
     updatePixmap();
   }
@@ -348,11 +346,13 @@ QVector<QPointF> LayerItem::cagePoints() const {
 
 void LayerItem::updateCagePoint( TransformHandleItem* handle, const QPointF& localPos )
 {
-  std::cout << "LayerItem::updateCagePoint(): Processing..." << std::endl;
+  // std::cout << "LayerItem::updateCagePoint(): Processing..." << std::endl;
+  {
     int idx = m_handles.indexOf(handle);
     if ( idx < 0 ) return;
     m_cage[idx] = localPos;
     update(); // neu zeichnen
+  }
 }
 
 void LayerItem::setCagePoint( int idx, const QPointF& pos )

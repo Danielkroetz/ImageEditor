@@ -11,7 +11,9 @@ class LayerItem;
 
 class CageWarpCommand : public AbstractCommand
 {
+
 public:
+
     CageWarpCommand( LayerItem* layer, const QVector<QPointF>& before,
                     const QVector<QPointF>& after, const QRectF& rect, int rows, int columns, QUndoCommand* parent = nullptr );
 
@@ -23,11 +25,10 @@ public:
     QJsonObject toJson() const override;
     static CageWarpCommand* fromJson( const QJsonObject& obj, const QList<LayerItem*>& layers, QUndoCommand* parent = nullptr );
     
-    void pushNewStep() {
-      m_steps += 1;
-    }
+    void pushNewWarpStep( const QVector<QPointF>& points );
 
 private:
+
     int m_layerId = -1;
     
     int m_steps = 0;
