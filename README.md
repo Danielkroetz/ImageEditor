@@ -14,11 +14,39 @@ A versatile Qt6-based image processing tool with JSON-history support, designed 
 
 ## Prerequisites
 
-### Linux (Debian 12 / Bookworm)
-```bash
-sudo apt update
-sudo apt install qt6-base-dev qt6-base-dev-tools cmake g++ build-essential libvulkan-dev
+### System Requirements & Qt6 Compatibility
 
+The ImageEditor application requires **Qt6**. Below is a list of Linux distributions that provide native support for Qt6 through their official package repositories (`apt`).
+
+### Supported Ubuntu Versions
+| Ubuntu Version | Release Name | Qt6 Support | Native Repo Version |
+| :--- | :--- | :--- | :--- |
+| **Ubuntu 24.10** | Oracular Oriole | ✅ Supported | Qt 6.6.x |
+| **Ubuntu 24.04 LTS**| Noble Numbat | ✅ Supported | Qt 6.4.x |
+| **Ubuntu 22.04 LTS**| Jammy Jellyfish | ✅ Supported | Qt 6.2.4 |
+| **Ubuntu 20.04 LTS**| Focal Fossa | ❌ No | (Qt 5 only) |
+
+### Supported Debian Versions
+| Debian Version | Release Name | Qt6 Support | Native Repo Version |
+| :--- | :--- | :--- | :--- |
+| **Debian 13** | Trixie | ✅ Testing | Qt 6.6 / 6.7 |
+| **Debian 12** | Bookworm | ✅ Stable | Qt 6.4.2 |
+| **Debian 11** | Bullseye | ❌ No | (Qt 5 only) |
+
+---
+
+### Installation on Linux
+To set up the development environment on a supported Debian or Ubuntu system, run the following commands:
+
+```bash
+# Update package lists
+sudo apt update
+
+# Install Qt6 base development files
+sudo apt install qt6-base-dev qt6-declarative-dev
+
+# Optional: Install build tools if not present
+sudo apt install build-essential cmake
 ```
 
 ### macOS
