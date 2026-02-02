@@ -81,14 +81,14 @@ To run the editor without a GUI (e.g., via SSH on your Debian server), use the -
 
 ### Examples
 
-**Convert an image to grayscale (Offscreen):**
+**Open an image with a project file:**
 
 ```bash
-./ImageEditor --batch -f photo.jpg -o output.png
+./ImageEditor --file filename.png --project project.json 
 
 ```
 
-**Apply a JSON transformation project:**
+**Apply a JSON transformation project (Offscreen):**
 
 ```bash
 ./ImageEditor --batch --project task.json -o result.png
