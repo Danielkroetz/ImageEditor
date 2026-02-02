@@ -1,42 +1,43 @@
-#include "PolygonDeletePointCommand.h"
+#include "PolygonMovePointCommand.h"
 
-PolygonDeletePointCommand::PolygonDeletePointCommand(EditablePolygon* poly,
-                                                     int idx,
-                                                     const QPointF& p,
-                                                     QUndoCommand* parent)
-    : AbstractCommand("Delete Polygon Point", parent)
-    , m_poly(poly)
-    , m_idx(idx)
-    , m_point(p)
+PolygonMovePointCommand::PolygonMovePointCommand(
+    EditablePolygon* poly, int idx, const QPointF& o, const QPointF& n,
+    QUndoCommand* parent )
+    : AbstractCommand(parent),
+      m_poly(poly), m_idx(idx), m_oldPos(o), m_newPos(n)
 {
+  setText(QString("Move polygon point %1").arg(idx));
 }
 
-void PolygonDeletePointCommand::redo()
+void PolygonMovePointCommand::undo()
 {
-    m_poly->removePoint(m_idx);
+    m_poly->setPoint(m_idx, m_oldPos);
 }
 
-void PolygonDeletePointCommand::undo()
+void PolygonMovePointCommand::redo()
 {
-    m_poly->insertPoint(m_idx, m_point);
+    m_poly->setPoint(m_idx, m_newPos);
 }
 
-QJsonObject PolygonDeletePointCommand::toJson() const
+QJsonObject PolygonMovePointCommand::toJson() const
 {
-    QJsonObject obj = AbstractCommand::toJson();
-    obj["type"] = "PolygonDeletePoint";
-    obj["idx"] = m_idx;
-    obj["x"] = m_point.x();
-    obj["y"] = m_point.y();
-    return obj;
+    QJsonObject o = AbstractCommand::toJson();
+    o["type"] = "PolygonMovePoint";
+    o["idx"] = m_idx;
+    o["ox"] = m_oldPos.x();
+    o["oy"] = m_oldPos.y();
+    o["nx"] = m_newPos.x();
+    o["ny"] = m_newPos.y();
+    return o;
 }
 
-PolygonDeletePointCommand* PolygonDeletePointCommand::fromJson(const QJsonObject& obj,
-                                                               EditablePolygon* poly)
+PolygonMovePointCommand* PolygonMovePointCommand::fromJson(
+    const QJsonObject& o, EditablePolygon* poly)
 {
-    return new PolygonDeletePointCommand(
+    return new PolygonMovePointCommand(
         poly,
-        obj["idx"].toInt(),
-        QPointF(obj["x"].toDouble(), obj["y"].toDouble())
+        o["idx"].toInt(),
+        QPointF(o["ox"].toDouble(), o["oy"].toDouble()),
+        QPointF(o["nx"].toDouble(), o["ny"].toDouble())
     );
 }

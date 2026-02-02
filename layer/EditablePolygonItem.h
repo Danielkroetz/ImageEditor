@@ -7,6 +7,7 @@
 #include <QJsonArray>
 
 #include "EditablePolygon.h"
+#include "LayerItem.h"
 
 class EditablePolygonItem : public QGraphicsObject
 {
@@ -38,6 +39,7 @@ protected:
 
 private slots:
     void updateGeometry();
+    void onVisibilityChanged();
 
 private:
     // --- Hilfsfunktionen ---
@@ -46,11 +48,14 @@ private:
     void rebuildHandles();
 
 private:
+
     EditablePolygon* m_poly = nullptr;
+    LayerItem* m_layer = nullptr;
 
     // Dragging-State
     int     m_activePoint = -1;
     QPointF m_dragStartPos;
+    QPointF m_dragMousePressPos;
 
     // Darstellung
     QVector<QGraphicsEllipseItem*> m_handles;

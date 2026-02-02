@@ -16,7 +16,7 @@ class LassoCutCommand : public AbstractCommand
 
 public:
     LassoCutCommand( LayerItem* originalLayer, LayerItem* newLayer, const QRect& bounds, 
-                         const QImage& originalBackup, const int index, QUndoCommand* parent=nullptr );
+                         const QImage& originalBackup, const int index, const QString& name, QUndoCommand* parent=nullptr );
     
     QString type() const override { return "LassoCut"; }
     
@@ -26,20 +26,8 @@ public:
     QJsonObject toJson() const override;
     static LassoCutCommand* fromJson( const QJsonObject& obj, const QList<LayerItem*>& layers, QUndoCommand* parent = nullptr );
     
-    void redo123() {
-        QImage tempImage = m_originalLayer->image();
-        QPainter p(&tempImage);
-         p.setCompositionMode(QPainter::CompositionMode_Clear); // Macht den Bereich transparent
-         p.fillRect(m_bounds, Qt::transparent);
-        p.end();
-        m_originalLayer->setImage(tempImage);
-        if (m_newLayer->scene() == nullptr && m_originalLayer->scene()) {
-         m_originalLayer->scene()->addItem(m_newLayer);
-        }
-        m_newLayer->setVisible(true);
-        m_originalLayer->update();
-    }
     
+    void setController( QUndoCommand *undoCommand ) { m_controller = undoCommand; };
     void save_backup() {
       m_backup.save("/tmp/imageeditor_backuppic.png");
     }
@@ -49,8 +37,11 @@ private:
     int m_originalLayerId = -1;
     int m_newLayerId = -1;
     
-    LayerItem* m_originalLayer;
-    LayerItem* m_newLayer;
+    QUndoCommand* m_controller = nullptr;
+    LayerItem* m_originalLayer = nullptr;
+    LayerItem* m_newLayer = nullptr;
+    
+    QString m_name;
     QRect m_bounds;
     QImage m_backup;
     

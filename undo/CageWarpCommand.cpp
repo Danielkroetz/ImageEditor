@@ -22,7 +22,7 @@ CageWarpCommand::CageWarpCommand( LayerItem* layer,
 // 
 void CageWarpCommand::pushNewWarpStep( const QVector<QPointF>& points )
 {
-  std::cout << "CageWarpCommand::pushNewWarpStep(): Processing...";
+  std::cout << "CageWarpCommand::pushNewWarpStep(): Processing..." << std::endl;
   {
     m_after = points;
     m_steps += 1;
@@ -40,7 +40,9 @@ void CageWarpCommand::undo()
     mesh.setPoints(m_before);
     // m_layer->cageMesh().setPoints(m_before);
     // Triangle Warp auf Bild anwenden
-    m_layer->applyTriangleWarp();
+    // ??? m_layer->applyTriangleWarp();
+    m_layer->setCageVisible(false);
+    m_layer->resetPixmap();
   }
 }
 
@@ -50,10 +52,15 @@ void CageWarpCommand::redo()
   {
     if ( !m_layer ) return;
     // Cage auf Endposition setzen
-    CageMesh mesh = m_layer->cageMesh();
-    mesh.setPoints(m_after);
+    
+    m_layer->initCage(m_after,m_rect,m_rows,m_columns);
+    
+    // CageMesh mesh = m_layer->cageMesh();
+    // mesh.setPoints(m_after);
+    
     // m_layer->cageMesh().setPoints(m_after);
     // Triangle Warp auf Bild anwenden
+    m_layer->setCageVisible(true);
     m_layer->applyTriangleWarp();
   }
 }
@@ -114,7 +121,7 @@ CageWarpCommand* CageWarpCommand::fromJson( const QJsonObject& obj, const QList<
     int columns = obj["columns"].toInt(-1);
     // before
     QVector<QPointF> before;
-    QJsonArray before_pts = obj["before"].toArray();
+    QJsonArray before_pts = obj["cagepoints_before"].toArray();
     before.reserve(before_pts.size());
     for ( const QJsonValue& v : before_pts ) {
         QJsonObject po = v.toObject();
@@ -122,7 +129,7 @@ CageWarpCommand* CageWarpCommand::fromJson( const QJsonObject& obj, const QList<
     }
     // after
     QVector<QPointF> after;
-    QJsonArray after_pts = obj["after"].toArray();
+    QJsonArray after_pts = obj["cagepoints_after"].toArray();
     after.reserve(after_pts.size());
     for ( const QJsonValue& v : after_pts ) {
         QJsonObject po = v.toObject();

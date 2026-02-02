@@ -21,6 +21,7 @@ struct CageSpring {
  
 class CageMesh
 {
+
 public:
     CageMesh();
 
@@ -46,6 +47,12 @@ public:
     void setPoints( const QVector<QPointF>& pts );
     void enforceConstraints( int idx );
     QRectF boundingRect() const;
+    
+    void addOffset( qreal x, qreal y ) { m_offset += QPointF(x,y); }
+    QPointF getOffset() const { return m_offset; }
+    void setOffset( qreal x = -0.5, qreal y = -0.5 ) { m_offset = QPointF(x,y);  }
+    
+    void printself();
 
 private:
 
@@ -54,6 +61,8 @@ private:
     int m_cols = 0;
     int m_rows = 0;
     
+    QPointF m_offset = QPointF(0,0);
+    
     QVector<QPointF> m_points;
     QVector<QPointF> m_originalPoints;
     QVector<CageSpring> m_springs;
@@ -61,4 +70,5 @@ private:
     qreal m_minSpacing = 1.0;
 
     void addSpring( int a, int b );
+    
 };

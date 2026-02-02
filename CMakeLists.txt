@@ -33,7 +33,14 @@ set(SOURCES
     undo/PaintStrokeCommand.cpp
     undo/InvertLayerCommand.cpp
     undo/MirrorLayerCommand.cpp
+    undo/EditablePolygonCommand.cpp
     undo/TransformLayerCommand.cpp
+    undo/PolygonMovePointCommand.cpp
+    undo/PolygonInsertPointCommand.cpp
+    undo/PolygonDeletePointCommand.cpp
+    undo/PolygonTranslateCommand.cpp
+    undo/PolygonSmoothCommand.cpp
+    undo/PolygonReduceCommand.cpp
     undo/MoveLayerCommand.cpp
     undo/MaskStrokeCommand.cpp
     undo/MaskPaintCommand.cpp
@@ -65,6 +72,13 @@ set(HEADERS
     undo/MaskPaintCommand.h
     undo/MirrorLayerCommand.h
     undo/TransformLayerCommand.h
+    undo/EditablePolygonCommand.h
+    undo/PolygonMovePointCommand.h
+    undo/PolygonInsertPointCommand.h
+    undo/PolygonDeletePointCommand.h
+    undo/PolygonTranslateCommand.h
+    undo/PolygonSmoothCommand.h
+    undo/PolygonReduceCommand.h
     util/GeometryUtils.h
 )
 

@@ -109,10 +109,14 @@ static QJsonObject parser( const QCoreApplication *app, int argc ) {
   parser.addOption(outFileOption);
   QCommandLineOption batchOption("batch", "Run application in batch mode without running graphical user interface.");
   parser.addOption(batchOption);
+  // QCommandLineOption intermediateOption(QStringList() << "save-intermediate", "Save intermediate steps.", "file");
+  // parser.addOption(intermediateOption);
   QCommandLineOption vulkanOption("vulkan", "If available enable hardware accelerated Vulkan rendering.");
   parser.addOption(vulkanOption);
   QCommandLineOption historyOption("history", "Print history of last calls to stdout.");
   parser.addOption(historyOption);
+  QCommandLineOption forceOption("force", "Overwrite an existing output file.");
+  parser.addOption(forceOption);
   parser.process(*app);
   
   // --- history ---
@@ -140,6 +144,7 @@ static QJsonObject parser( const QCoreApplication *app, int argc ) {
    exit(1);
   }
   obj["vulkan"] = parser.isSet(vulkanOption);
+  obj["force"] = parser.isSet(forceOption);
   
   return obj;
 }
@@ -159,7 +164,7 @@ int main( int argc, char *argv[] )
      if ( QString(argv[i]) == "--batch" ) batchProcssing = true;
     }
     
-    // --- check whether batch processing is requested---
+    // --- check whether batch processing is requested ---
     if ( batchProcssing ) {
       QCoreApplication *app = new QCoreApplication(argc,argv);
       app->setApplicationName("ImageEditor");
@@ -168,13 +173,17 @@ int main( int argc, char *argv[] )
       QString imagePath = parsedOptions.value("imagePath").toString("");
       QString historyPath = parsedOptions.value("historyPath").toString("");
       if ( historyPath.isEmpty() ) {
-       qInfo() << "Error: Invalid input. Missing required option '--project <filename>' in batch mode.";
+       printError("Invalid input. Missing required option '--project <filename>' in batch mode.");
        return 1;
       }
       QString outputPath = parsedOptions.value("outputPath").toString("");
       if ( outputPath.isEmpty() ) {
-       qInfo() << "Error: Invalid input. Missing required option '--output <filename>' in batch mode.";
+       printError("Invalid input. Missing required option '--output <filename>' in batch mode.");
        return 1;
+      }
+      if ( QFile::exists(outputPath) && parsedOptions.value("force").toBool() == false ) {
+        printError(QString("Output file '%1' already exists. Use command line option --force to overwrite.").arg(outputPath));
+        return 1; 
       }
       ImageLoader loader;
       QImage image;
@@ -182,7 +191,7 @@ int main( int argc, char *argv[] )
        saveCurrentCall(argc, argv);
        ImageProcessor proc;
        if ( !proc.process(historyPath) ) {
-        qInfo() << "Error: Malfunction in ImageProcessor::process(" << historyPath << ").";
+        printError(QString("Malfunction in ImageProcessor::process(%1).").arg(historyPath));
         return 1;
        }
        image = proc.getOutputImage();
@@ -191,12 +200,12 @@ int main( int argc, char *argv[] )
         saveCurrentCall(argc, argv);
         ImageProcessor proc(loader.getImage());
         if ( !proc.process(historyPath) ) {
-         qInfo() << "Error: Malfunction in ImageProcessor::process(" << historyPath << ").";
+         printError(QString("Malfunction in ImageProcessor::process(%1).").arg(historyPath));
          return 1;
         }
         image = proc.getOutputImage();
        } else {
-        qInfo() << "Error: Malfunction in ImageLoader::load(" << imagePath << ").";
+        printError(QString("Malfunction in ImageLoader::load(%1).").arg(imagePath));
         return 0;
        }
       }

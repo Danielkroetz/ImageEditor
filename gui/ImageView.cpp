@@ -1,6 +1,11 @@
 #include "ImageView.h"
+#include "MainWindow.h"
+
 #include "../layer/LayerItem.h"
 #include "../layer/MaskLayerItem.h"
+#include "../layer/EditablePolygon.h"
+#include "../layer/EditablePolygonItem.h"
+#include "../undo/EditablePolygonCommand.h"
 #include "../undo/PaintCommand.h"
 #include "../undo/CageWarpCommand.h"
 #include "../undo/MaskStrokeCommand.h"
@@ -215,25 +220,28 @@ void ImageView::enablePipette( bool enabled ) {
     setCursor(enabled ? Qt::CrossCursor : Qt::ArrowCursor);
 }
 
-// ------------------------ Mouse tools -------------------------------------
+// ------------------------ ------------------------ ------------------------
+// ------------------------       Event tools        ------------------------
+// ------------------------ ------------------------ ------------------------
+void ImageView::keyPressEvent( QKeyEvent* e )
+{
+  qDebug() << "ImageView::keyPressEvent(): key =" << e->key();
+  {
+    if ( m_polygonEnabled && ( e->key() == Qt::Key_Return || e->key() == Qt::Key_Escape ) ) {
+     setPolygonEnabled(false);
+     return;
+    }
+    QGraphicsView::keyPressEvent(e);
+  }
+}
+
 void ImageView::mousePressEvent( QMouseEvent* event )
 {
-  // std::cout << "ImageView::mousePressEvent(): m_lassoEnabled=" << m_lassoEnabled << std::endl;
-  
+  std::cout << "ImageView::mousePressEvent(): m_polygonEnabled=" << m_polygonEnabled << std::endl;
+  {
     if ( !scene() )
         return;     
         
-    /* for debugging
-     std::cout << "ImageView::mousePressEvent(): Scanning " << m_scene->items().size() << " items..." << std::endl;
-     for ( auto* item : m_scene->items() ) {
-       auto* layer = dynamic_cast<LayerItem*>(item);
-       if ( layer ) {
-        std::cout << "ImageView::mousePressEvent(): Found LayerItem " << layer->name().toStdString() << " ..." << std::endl;
-       }
-     }
-     */
-    // end
-
     if ( event->button() != Qt::LeftButton && event->button() != Qt::RightButton ) {
         QGraphicsView::mousePressEvent(event);
         return;
@@ -345,11 +353,24 @@ void ImageView::mousePressEvent( QMouseEvent* event )
     }
     
     // --- Polygon starten ---
-    if ( m_polygonEnabled ) {
+    if ( m_polygonEnabled && event->button() == Qt::LeftButton ) {
+       if ( m_activePolygon != nullptr ) {
+         m_activePolygon->addPoint(scenePos);
+         return;
+       }
     }
 
     QGraphicsView::mousePressEvent(event);
   
+  }
+}
+
+void ImageView::mouseDoubleClickEvent( QMouseEvent* event )
+{
+  std::cout << "ImageView::mouseDoubleClickEvent(): Processing..." << std::endl;
+  {
+    QGraphicsView::mouseDoubleClickEvent(event);
+  }
 }
 
 void ImageView::mouseMoveEvent( QMouseEvent* event )
@@ -711,17 +732,37 @@ void ImageView::cutSelection()
 }
 
 // ---------------------------- Layer methods -----------------------------
-void ImageView::setLayerTransformMode( LayerItem::TransformMode mode )
+LayerItem* ImageView::getSelectedItem()
 {
-   // std::cout << "ImageView::setLayerTransformMode(): mode=" << mode << std::endl;
-   {
+   for ( auto* item : m_scene->items() ) {
+        auto* layer = dynamic_cast<LayerItem*>(item);
+        if ( layer && layer->isSelected() ) {
+          return layer;
+        }
+    }
+    return nullptr;
+}
+
+
+void ImageView::setLayerOperationMode( LayerItem::OperationMode mode )
+{
+    LayerItem *layer = getSelectedItem();
+    if ( layer != nullptr ) {
+      layer->setOperationMode(mode);
+    } else {
+     layer = baseLayer();
+     if ( layer != nullptr ) {
+       layer->setOperationMode(mode);
+     }
+    }
+  /*
 	for ( auto* item : m_scene->items() ) {
         auto* layer = dynamic_cast<LayerItem*>(item);
         if ( layer && layer->isSelected() ) {
           layer->setTransformMode(mode);
         }
     }
-   }
+   */
 }
 
 void ImageView::setNumberOfCageControlPoints( int nControlPoints ) 
@@ -773,14 +814,27 @@ void ImageView::clearLayers()
 
 void ImageView::createLassoLayer()
 {
-    std::cout << "ImageView::createLassoLayer(): polygon_size=" << m_lassoPolygon.size() << std::endl;
+  createNewLayer(m_lassoPolygon,"Lasso layer");
+  // --- send signal to mainWindow ---
+  emit lassoLayerAdded();
+}
+
+LassoCutCommand* ImageView::createNewLayer( const QPolygonF& polygon, const QString &name )
+{
+  std::cout << "ImageView::createNewLayer(): name=" << name.toStdString() << ",  polygon_size=" << polygon.size() << std::endl;
+  {
+    // --- switch to layer operation mode ---
+    MainWindow *mainWindow = dynamic_cast<MainWindow*>(m_parent);
+    if ( mainWindow != nullptr ) {
+      mainWindow->setMainOperationMode(MainWindow::MainOperationMode::ImageLayer);
+    }
     // --- get main image layer ---
     LayerItem* base = baseLayer();
-    if ( !base || m_lassoPolygon.size() < 3 )
-        return;
+    if ( !base || polygon.size() < 3 )
+        return nullptr;
     QImage& src = base->image();
     // --- prepare ---
-    QPolygonF polyF = QPolygonF(m_lassoPolygon.begin(), m_lassoPolygon.end());
+    QPolygonF polyF = QPolygonF(polygon.begin(), polygon.end());
     QRectF boundsF = polyF.boundingRect();
     QRect bounds = boundsF.toAlignedRect(); // ganzzahlig
     QImage backup = src.copy(bounds);
@@ -855,13 +909,13 @@ void ImageView::createLassoLayer()
     // --- Neues LayerItem ---
     int nidx = m_layers.size()+1;
     Layer* layer = new Layer(nidx,cut);
-    layer->m_name = QString("Lasso Layer %1").arg(nidx);
-    LayerItem* newLayer = new LayerItem(cut); // QPixmap::fromImage(cut));
+    layer->m_name = QString("%1 %2").arg(name).arg(nidx);
+    LayerItem* newLayer = new LayerItem(cut);
     newLayer->setParent(m_parent);
     newLayer->setIndex(nidx);
     newLayer->setLayer(layer);
     newLayer->setUndoStack(m_undoStack);
-    LassoCutCommand* cmd = new LassoCutCommand(base, newLayer, bounds, cut, nidx); // hier schon ausgeschnitten
+    LassoCutCommand* cmd = new LassoCutCommand(base, newLayer, bounds, cut, nidx, name);
     m_undoStack->push(cmd);
     newLayer->setPos(base->mapToScene(bounds.topLeft()));
     newLayer->setZValue(base->zValue()+1);
@@ -871,87 +925,123 @@ void ImageView::createLassoLayer()
     base->updatePixmap();
     layer->m_item = newLayer;
     m_layers.push_back(layer);
-    // --- send signal to mainWindow ---
-    emit lassoLayerAdded();
-    
-    
-/*
-    if ( m_lassoPolygon.size() < 3 ) return; // zu klein
+    return cmd;
+  }
+}
 
-    // --- 1. Polygon & BoundingRect ---
-    QPolygon lassoPoly(m_lassoPolygon);
-    QRectF bounds = lassoPoly.boundingRect();
-
-    // --- 2. Polygon & BoundingRect ---
-    LayerItem* mainLayer = nullptr;
-    for ( auto* item : m_scene->items(Qt::DescendingOrder) ) {
-      auto* layer = dynamic_cast<LayerItem*>(item);
-      if ( layer && layer->getType() == LayerItem::MainImage ) {
-        mainLayer = layer;
-        break;
-      }  
+// ---------------------------- --------------- -----------------------------
+// ---------------------------- Polygon methods -----------------------------
+// ---------------------------- --------------- -----------------------------
+EditablePolygonCommand* ImageView::getPolygonUndoCommand( const QString& name )
+{
+  if ( name == "" ) {
+   const QUndoCommand* cmd = m_undoStack->command(m_undoStack->index() - 1);
+   EditablePolygonCommand* polyCmd = const_cast<EditablePolygonCommand*>(
+        dynamic_cast<const EditablePolygonCommand*>(cmd)
+   );
+   return polyCmd;
+  }
+  for ( int i = m_undoStack->count() - 1; i >= 0; --i ) {
+    const QUndoCommand* cmd = m_undoStack->command(i);
+    if ( cmd->text() == name ) {
+       return const_cast<EditablePolygonCommand*>(
+           dynamic_cast<const EditablePolygonCommand*>(cmd)
+       );
     }
-    if ( !mainLayer ) return;
-    QImage sourceImage = mainLayer->pixmap().toImage(); // Hauptbild
-    
-    // --- 3. New pixmap for Lasso-Layer ---
-    QImage newImage(bounds.size().toSize(), QImage::Format_ARGB32);
-    newImage.fill(Qt::transparent);
-    QPainter p(&newImage);
-    QRegion clipRegion(lassoPoly.translated(-bounds.topLeft().toPoint()));
-    p.setClipRegion(clipRegion);
-    p.drawImage(-bounds.topLeft(), sourceImage);
-    p.end();
-    QPixmap pixmap = QPixmap::fromImage(newImage);
+  }
+  return nullptr;
+}
 
-    // --- 3. Create new LayerItem ---
-    Layer* layer = new Layer;
-    layer->name = "Lasso Layer";
-    LayerItem* item = new LayerItem(pixmap); // LassoLayer
-    item->setLayer(layer);
-    item->setUndoStack(m_undoStack);
-    item->setPos(bounds.topLeft()); // Position setzen
-    m_scene->addItem(item);
-    item->setSelected(true);
-    layer->item = item;
-    m_layers.push_back(layer);
-    
-    // UndoStack kann hier auch ergänzt werden (optional)
-    emit layerAdded();
-*/
-    
-/*
-    if ( m_lassoPolygon.size() < 3 ) return;
-    QRect bounding = QPolygonF(m_lassoPolygon).boundingRect().toAlignedRect();
-    QImage newLayer(bounding.size(), QImage::Format_ARGB32_Premultiplied);
-    newLayer.fill(Qt::transparent);
-    for (int y = bounding.top(); y < bounding.bottom(); ++y) {
-        for (int x = bounding.left(); x < bounding.right(); ++x) {
-            QPoint pt(x,y);
-            if (QPolygonF(m_lassoPolygon).containsPoint(pt, Qt::OddEvenFill)) {
-                if (x>=0 && x<m_image.width() && y>=0 && y<m_image.height()) {
-                    newLayer.setPixelColor(x-bounding.left(),
-                                           y-bounding.top(),
-                                           m_image.pixelColor(x,y));
-                    m_image.setPixelColor(x,y,Qt::transparent);
-                }
-            }
-        }
+void ImageView::undoPolygonOperation()
+{
+    EditablePolygonCommand* polyCmd = ImageView::getPolygonUndoCommand(QString("Editable Polygon %1").arg(m_polygonIndex));
+    if ( polyCmd == nullptr )
+      return;
+    EditablePolygon *polygon = polyCmd->model();
+    if ( polygon != nullptr ) {
+     polygon->undoStack()->undo();
     }
-    Layer* layer = new Layer;
-    layer->name = "Lasso Layer";
-    layer->image = newLayer;
-    LayerItem* item = new LayerItem(QPixmap::fromImage(newLayer));
-    item->setLayer(layer);
-    item->setFlags(QGraphicsItem::ItemIsMovable |
-                   QGraphicsItem::ItemIsSelectable |
-                   QGraphicsItem::ItemSendsGeometryChanges);
-    item->setPos(bounding.topLeft());
-    // item->setShowBoundingBox(true);
-    m_scene->addItem(item);
-    layer->item = item;
-    m_layers.push_back(layer);
-    viewport()->update();
-    emit layerAdded();
-*/
+}
+
+void ImageView::redoPolygonOperation()
+{
+    EditablePolygonCommand* polyCmd = ImageView::getPolygonUndoCommand(QString("Editable Polygon %1").arg(m_polygonIndex));
+    if ( polyCmd == nullptr )
+      return;
+    EditablePolygon *polygon = polyCmd->model();
+    if ( polygon != nullptr ) {
+     polygon->undoStack()->redo();
+    }
+}
+
+void ImageView::createPolygonLayer()
+{
+  std::cout << "ImageView::createPolygonLayer(): Processing..." << std::endl;
+  {
+    if ( m_activePolygon != nullptr ) {
+      LayerItem *layer = baseLayer();
+      if ( layer != nullptr ) {
+        finishPolygonDrawing(layer);
+      }
+    }
+    MainWindow *mainWindow = dynamic_cast<MainWindow*>(m_parent);
+    if ( mainWindow != nullptr ) {
+      mainWindow->setMainOperationMode(MainWindow::MainOperationMode::ImageLayer);
+    }
+    EditablePolygonCommand* polyCmd = ImageView::getPolygonUndoCommand();
+    if ( polyCmd == nullptr )
+      return;
+    EditablePolygon *editablePolygon = polyCmd->model();
+    if ( editablePolygon != nullptr ) {
+     LassoCutCommand *layerCut = createNewLayer(editablePolygon->polygon(),"Polygon layer");
+     if ( layerCut != nullptr ) {
+      layerCut->setController(layerCut);
+      editablePolygon->setVisible(false);
+     }
+     // --- send signal to mainWindow ---
+     // emit lassoLayerAdded();
+    }
+  }
+}
+
+void ImageView::finishPolygonDrawing( LayerItem* layer )
+{
+  std::cout << "ImageView::finishPolygonDrawing(): Processing..." << std::endl;
+  {
+    if ( !m_activePolygon || m_activePolygon->pointCount() < 3 )
+        return;
+    MainWindow *mainWindow = dynamic_cast<MainWindow*>(m_parent);
+    if ( mainWindow != nullptr ) {
+      mainWindow->setMainOperationMode(MainWindow::MainOperationMode::CreatePolygon);
+    }
+    QPolygonF poly = m_activePolygon->polygon();
+    scene()->removeItem(m_activePolygonItem);
+    delete m_activePolygonItem;
+    delete m_activePolygon;
+    m_activePolygonItem = nullptr;
+    m_activePolygon = nullptr;
+    m_undoStack->push(new EditablePolygonCommand(layer,scene(),poly,QString("Polygon %1").arg(m_editablePolygons.size())));
+  }
+}
+
+void ImageView::setPolygonEnabled( bool enabled )
+{ 
+  std::cout << "ImageView::setPolygonEnabled(): npolygons=" << m_editablePolygons.size() << ", enabled=" << enabled << std::endl;
+  {
+   LayerItem *layer = baseLayer();
+   if ( layer != nullptr ) {
+    layer->printself();
+    m_polygonEnabled = enabled;
+    if ( m_polygonEnabled ) {
+     m_activePolygon = new EditablePolygon(QString("Polygon %1").arg(1+m_editablePolygons.size()),this);
+     m_editablePolygons.push_back(m_activePolygon);
+     m_activePolygonItem = new EditablePolygonItem(m_activePolygon,layer);
+     m_scene->addItem(m_activePolygonItem);
+    } else {
+     finishPolygonDrawing(layer);
+     // m_activePolygonItem = nullptr;
+     // m_activePolygon = nullptr;
+    }
+   }
+  }
 }

@@ -14,12 +14,16 @@
 #include "../layer/Layer.h"
 #include "../layer/LayerItem.h"
 #include "../layer/MaskLayerItem.h"
+#include "../layer/EditablePolygonItem.h"
+#include "../undo/EditablePolygonCommand.h"
 #include "../undo/MaskPaintCommand.h"
 #include "../undo/CageWarpCommand.h"
 
 // -------------------------------------    ------------------------------------- 
 class LayerItem;
 class MaskLayer;
+class EditablePolygon;
+class LassoCutCommand;
 
 struct PixelChange {
     QPoint pos;
@@ -42,6 +46,8 @@ public:
     void cutSelection();
     void clearSelection();
     void clearLayers(); 
+    void createLassoLayer();
+    void createPolygonLayer();
     void centerOnLayer( Layer* layer );
     void enablePipette( bool enabled );
     void setCrosshairVisible( bool visible ) { 
@@ -58,6 +64,8 @@ public:
       }
       viewport()->update(); 
     }
+    void finishPolygonDrawing( LayerItem* layer );
+    void setPolygonEnabled( bool enabled );
     void setColorTable( const QVector<QRgb>& lut );
     void setImage( const QImage& img ) {
       m_image = img.convertToFormat(QImage::Format_ARGB32);
@@ -65,8 +73,11 @@ public:
       for( int i=0;i<256;i++ ) lut[i] = qRgb(i,i,i);
       setColorTable(lut);
     }
+    
+    LayerItem* getSelectedItem();
     LayerItem* currentLayer() const;
     LayerItem* baseLayer();
+    EditablePolygonCommand* getPolygonUndoCommand( const QString& name = "" );
     QImage& getImage() { return m_image; };
     QGraphicsScene* getScene() const { return m_scene; }
     QUndoStack* undoStack() const { return m_undoStack; }
@@ -75,6 +86,7 @@ public:
       if ( !m_maskItem ) return Qt::transparent;
       return m_maskItem->labelColor(label);
     }
+    
     void setBrushRadius( int r ) { m_brushRadius = r; }
     void setMaskBrushRadius( int r ) { m_maskBrushRadius = r; }
     void setBrushColor( const QColor& c ) { m_brushColor = c; }
@@ -83,8 +95,9 @@ public:
     void setBrushPreviewVisible( bool visible ) { m_showBrushPreview = visible; viewport()->update(); }
     void setMaskOpacity( qreal value ) { if ( m_maskItem ) m_maskItem->setOpacityFactor(value); }
     void setMaskLabel( quint8 index ) { m_currentMaskLabel = index; }
+    void setPolygonIndex( quint8 index ) { m_polygonIndex = index; }
     void setActiveCageLayer( LayerItem *item ) { m_selectedCageLayer = item; }
-    void setLayerTransformMode( LayerItem::TransformMode mode );
+    void setLayerOperationMode( LayerItem::OperationMode mode );
     void setNumberOfCageControlPoints( int nControlPoints );
     void setCageWarpRelaxationSteps( int nRelaxationSteps );
     void setMaskTool( MaskTool t );
@@ -94,9 +107,13 @@ public:
     void loadMaskImage( const QString& filename );
     void forcedUpdate();
     
+    void undoPolygonOperation();
+    void redoPolygonOperation();
+    
     void printself();
 
 signals:
+
     void cursorColorChanged( const QColor& color );
     void pickedColorChanged( const QColor& color );
     void cursorPositionChanged( int x, int y );
@@ -105,23 +122,30 @@ signals:
     void layerAdded();
 
 protected:
+
+    void keyPressEvent( QKeyEvent* e ) override;
     void mousePressEvent( QMouseEvent* event ) override;
     void mouseMoveEvent( QMouseEvent* event ) override;
     void mouseReleaseEvent( QMouseEvent* event ) override;
+    void mouseDoubleClickEvent( QMouseEvent* event ) override;
     void wheelEvent( QWheelEvent* event ) override;
     void drawForeground( QPainter* painter, const QRectF& rect ) override;
 
 private:
 
-    void createLassoLayer();  
+    LassoCutCommand* createNewLayer( const QPolygonF& polygon, const QString& name );
 
-    QList<Layer*> m_layers; // Data modell
+    QList<Layer*> m_layers;
+    QList<EditablePolygon*> m_editablePolygons;
     QVector<MaskPaintCommand::PixelChange> m_currentMaskStroke;
     
     LayerItem* m_activeLayer = nullptr;
     LayerItem* m_selectedLayer = nullptr;
     LayerItem* m_selectedCageLayer = nullptr;
     LayerItem* m_paintLayer = nullptr;
+    
+    EditablePolygon* m_activePolygon = nullptr;
+    EditablePolygonItem* m_activePolygonItem = nullptr;
     
     MaskLayer* m_maskLayer = nullptr;
     MaskLayerItem* m_maskItem = nullptr;
@@ -150,6 +174,7 @@ private:
     bool m_maskEraser = false;
     
     quint8 m_currentMaskLabel = 1;
+    quint8 m_polygonIndex = 1;
     qreal m_brushHardness = 1.0;
     QColor m_brushColor = Qt::white;
     QColor m_backgroundColor = Qt::white;

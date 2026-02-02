@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QCoreApplication>
+#include <QComboBox>
 #include <QMainWindow>
 #include <QString>
 #include <QUndoView>
@@ -17,12 +18,15 @@ class MainWindow : public QMainWindow
     
 public:
 
+    enum MainOperationMode { Paint, Mask, FreeSelection, Polygon, ImageLayer, CreateLasso, CreatePolygon };
+
     explicit MainWindow( const QString& imagePath = QString(), const QString& historyPath = QString(), 
                 bool useVulkan = false, QWidget* parent = nullptr );
     
     // ----------------- global setter and getter -----------------
     ImageView* getViewer() const { return m_imageView; }
     int getNumberOfCageControlPoints() const { return m_cageControlPointsSpin->value(); }
+    void setMainOperationMode( MainOperationMode = ImageLayer );
 
 private slots:
 
@@ -63,7 +67,9 @@ private:
     void createActions();
     void createToolbars();
     void createStatusbar();
-
+    
+    QComboBox* buildDefaultColorComboBox( const QString& name = "Label" );
+    
     ImageView* m_imageView = nullptr;
     LayerItem* m_layerItem = nullptr;
     
@@ -74,6 +80,7 @@ private:
     
     QToolBar* m_editToolbar = nullptr;
     QToolBar* m_lassoToolbar = nullptr;
+    QToolBar* m_layerToolbar = nullptr;
     QToolBar* m_maskToolbar = nullptr;
     QToolBar* m_polygonToolbar = nullptr;
     
@@ -89,6 +96,7 @@ private:
     QAction* m_paintControlAction = nullptr;
     QAction* m_lassoControlAction = nullptr;
     QAction* m_maskControlAction = nullptr;
+    QAction* m_layerControlAction = nullptr;
     QAction* m_polygonControlAction = nullptr;
     QAction* m_openAction = nullptr;
     QAction* m_saveAsAction = nullptr;
@@ -102,6 +110,7 @@ private:
     QAction* m_paintAction = nullptr;
     QAction* m_showDockWidgets = nullptr;
     QAction* m_lassoAction = nullptr;
+    QAction* m_polygonAction = nullptr;
     QAction* m_infoAction = nullptr; 
     
     bool m_updatingLayerList = false;

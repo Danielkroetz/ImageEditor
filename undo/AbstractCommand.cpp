@@ -1,12 +1,13 @@
 #include "AbstractCommand.h"
 
-// Include aller konkreten Commands
+// Include of all relevant commands
 #include "CageWarpCommand.h"
 #include "MoveLayerCommand.h"
 #include "PaintStrokeCommand.h"
 #include "InvertLayerCommand.h"
 #include "LassoCutCommand.h"
 #include "TransformLayerCommand.h"
+#include "EditablePolygonCommand.h"
 
 // >>>
 #include <QDebug>
@@ -26,21 +27,21 @@ AbstractCommand::AbstractCommand( QUndoCommand* parent )
 AbstractCommand* AbstractCommand::fromJson( const QJsonObject& obj, ImageView* view )
 {
     if ( !obj.contains("type") ) {
-        qWarning() << "AbstractCommand::fromJson(): Missing type";
+        qWarning() << "AbstractCommand::fromJson(): Missing type.";
         return nullptr;
     }
     const QString type = obj["type"].toString();
     // ---- Dispatch nach Command-Typ ----
     // ---- ------------------------- ----
-    qWarning() << "AbstractCommand::fromJson(): Unprocessed command type:" << type;
+    qWarning() << "AbstractCommand::fromJson(): Unprocessed command type: " << type;
     return nullptr;
 }
 
 AbstractCommand* AbstractCommand::fromJson( const QJsonObject& obj, const QList<LayerItem*>& layers )
 {
     if ( !obj.contains("type") ) {
-        qWarning() << "AbstractCommand::fromJson(): Missing type";
-        return nullptr;
+      qWarning() << "AbstractCommand::fromJson(): Missing type.";
+      return nullptr;
     }
     const QString type = obj["type"].toString();
     // ---- Dispatch nach Command-Typ ----
@@ -60,6 +61,22 @@ AbstractCommand* AbstractCommand::fromJson( const QJsonObject& obj, const QList<
         return LassoCutCommand::fromJson(obj,layers);
     if ( type == "TransformLayer" )
     	return TransformLayerCommand::fromJson(obj,layers);
+    if ( type == "EditablePolygonCommand" )
+        return EditablePolygonCommand::fromJson(obj,layers);
     qWarning() << "AbstractCommand::fromJson(): Unprocessed command type: " << type;
     return nullptr;
+}
+
+/**
+ */
+LayerItem* AbstractCommand::getLayerItem( const QList<LayerItem*>& layers, int layerId )
+{
+    LayerItem* layer = nullptr;
+    for ( LayerItem* l : layers ) {
+        if ( l->id() == layerId ) {
+            layer = l;
+            break;
+        }
+    }
+    return layer;
 }

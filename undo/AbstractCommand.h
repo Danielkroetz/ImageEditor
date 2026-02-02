@@ -18,6 +18,7 @@ class AbstractCommand : public QUndoCommand
 {
 
 public:
+
     explicit AbstractCommand( QUndoCommand* parent = nullptr );
     virtual ~AbstractCommand() override = default;
 
@@ -32,5 +33,8 @@ public:
     // ---- Factory ----
     static AbstractCommand* fromJson( const QJsonObject& obj, const QList<LayerItem*>& layers );
     static AbstractCommand* fromJson( const QJsonObject& obj, ImageView* view );
+    
+    // --- Static Helper ---
+    static LayerItem* getLayerItem( const QList<LayerItem*>& layers, int layerId = 0 );
     
 };

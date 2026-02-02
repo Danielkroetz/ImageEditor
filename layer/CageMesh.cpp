@@ -1,12 +1,23 @@
 #include "CageMesh.h"
 
+#include <QDebug>
 #include <QtMath>
 #include <QLine>
 
 #include <iostream>
  
+// ------------------------------  ------------------------------
 CageMesh::CageMesh() {}
 
+// ------------------------------  ------------------------------
+void CageMesh::printself()
+{
+  qDebug() << "CageMesh::printself(): size =" << m_cols << "x" << m_rows;
+  qDebug() << m_points;
+  qDebug() << m_originalPoints;
+}
+
+// ------------------------------  ------------------------------
 void CageMesh::create( const QRectF& bounds, int cols, int rows )
 {
   std::cout << "CageMesh::create(): cols=" << cols << ", rows=" << rows << std::endl;
@@ -77,17 +88,19 @@ QPointF CageMesh::originalPoint( int idx ) const
 void CageMesh::setPoint( int i, const QPointF& pos )
 {
     if ( i < 0 || i >= m_points.size() )
-        return;
+      return;
     m_points[i] = pos;
     enforceConstraints(i);
 }
 
 void CageMesh::setPoints( const QVector<QPointF>& pts )
 {
-  std::cout << "CageMesh::setPoints(): Proecssing..." << std::endl;
+  std::cout << "CageMesh::setPoints(): points=" << pts.size() << std::endl;
   {
-    if ( pts.size() != m_points.size() )
+    if ( pts.size() != m_points.size() ) {
+        printself();
         return;
+    }
     m_points = pts;
   }
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QGraphicsObject>
+#include <QUndoStack>
 #include <QPolygonF>
 #include <QVector>
 #include <QJsonObject>
@@ -15,30 +16,58 @@ class EditablePolygonItem;
 class EditablePolygon : public QObject
 {
     Q_OBJECT
+    
 public:
-    explicit EditablePolygon(QObject* parent = nullptr);
 
-    // --- Zugriff ---
+    explicit EditablePolygon( const QString& name = "", QObject* parent = nullptr );
+
+    // --- Access ---
+    QString name() const { return m_name; }
+    QUndoStack* undoStack() { return &m_undoStack; }
     const QPolygonF& polygon() const { return m_polygon; }
     int pointCount() const { return m_polygon.size(); }
-    QPointF point(int idx) const;
+    QPointF point( int idx ) const;
 
     // --- Modifikation (NUR über Commands aufrufen!) ---
-    void setPoint(int idx, const QPointF& p);
-    void insertPoint(int idx, const QPointF& p);
-    void removePoint(int idx);
-    void setPolygon(const QPolygonF& poly);
+    void smooth();
+    void remove();
+    void reduce( qreal tolerance = 0.5 );
+    void translate( const QPointF& d );
+    void addPoint( const QPointF& p );
+    void setPoint( int idx, const QPointF& p );
+    void insertPoint( int idx, const QPointF& p) ;
+    void removePoint( int idx );
+    void setPolygon( const QPolygonF& poly );
 
+    // --- Misc ---
+    bool polygonVisible() const { return m_polygonVisible; }
+    bool markersVisible() const { return m_markersVisible; }
     QRectF boundingRect() const;
+    void setVisible( bool isVisible );
+    void printself();
+    
+    // --- JSON ---
+    void undoStackFromJson( const QJsonArray& arr );
+    QJsonArray undoStackToJson() const;
 
     // --- Serialization ---
     QJsonObject toJson() const;
-    static EditablePolygon* fromJson(const QJsonObject& obj);
+    static EditablePolygon* fromJson( const QJsonObject& obj );
 
 signals:
+
     void changed();
+    void visibilityChanged();
 
 private:
+
+    QString m_name;
+
     QPolygonF m_polygon;
+    QUndoStack m_undoStack;
+    
+    bool m_polygonVisible = true;
+    bool m_markersVisible = true;
+    
 };
 

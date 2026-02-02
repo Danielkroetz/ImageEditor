@@ -22,7 +22,8 @@ class LayerItem : public QGraphicsPixmapItem
 public:
 
     enum LayerType { MainImage, LassoLayer };
-    enum TransformMode { None, CageEdit, CageWarp, Translate, Rotate, Scale, Flip, Flop, Perseptive };
+    enum OperationMode { None, Info, CageEdit, CageWarp, Translate, Rotate, Scale, Flip, Flop, Perseptive,
+                          Select, MovePoint, AddPoint, DeletePoint, TranslatePolygon, Reduce, Smooth, DeletePolygon };
 
     LayerItem( const QPixmap& pixmap, QGraphicsItem* parent = nullptr );
     LayerItem( const QImage& image, QGraphicsItem* parent = nullptr );
@@ -32,6 +33,7 @@ public:
     QImage& image( int id=0 );
     const QImage& originalImage();
     void updatePixmap();
+    void resetPixmap();
     void setFileInfo( const QString& filePath );
     void setImage( const QImage &image );
     void setLayer( Layer *layer );
@@ -50,10 +52,11 @@ public:
     // void enableCage();
     void disableCage();
     bool cageEnabled() const;
+    void setCageVisible( bool isVisible );
     
     int id() const { return m_index; }
     bool isEditing() const { return m_cageEditing; }
-    bool isCageWarp() const { return m_trafomode == TransformMode::CageWarp ? true : false; }
+    bool isCageWarp() const { return m_operationMode == OperationMode::CageWarp ? true : false; }
     
     QUndoStack* undoStack() const { return m_undoStack; }
     void setParent( QWidget *parent ) { m_parent = parent; }
@@ -66,12 +69,13 @@ public:
     void setNumberOfActiveCagePoints( int nControlPoints );
     void setCageWarpRelaxationSteps( int nRelaxationsSteps );
     
-    void setTransformMode( TransformMode mode );
-    TransformMode transformMode() const { return m_mode; }
+    void setOperationMode( OperationMode mode );
+    OperationMode operationMode() const { return m_operationMode; }
     
     const CageMesh& cageMesh() const { return m_mesh; }
     void setCagePoint( int idx, const QPointF& pos );
     void setCagePoints( const QVector<QPointF>& pts );
+    void initCage( const QVector<QPointF>& pts, const QRectF& rect, int rows, int columns );
     QVector<QPointF> cagePoints() const;
     void applyTriangleWarp();
     void applyCageWarp();
@@ -81,7 +85,7 @@ public:
     void updateOriginalImage();
     void updateImageRegion( const QRect& rect );
     
-    void printself();
+    void printself( bool debugSave = false );
 
 protected:
 
@@ -104,8 +108,7 @@ private:
     int m_index = 0;
     int m_nCageWarpRelaxationsSteps = 0;
     
-    TransformMode m_mode = None;
-    TransformMode m_trafomode = LayerItem::Translate;;
+    OperationMode m_operationMode = LayerItem::Translate;
     LayerType m_type = LayerItem::LassoLayer;
     
     QString m_name = "";
@@ -127,6 +130,7 @@ private:
 	bool m_dragging = false;
 	bool m_cageEnabled = false;
 	bool m_cageEditing = false;
+	bool m_mouseOperationActive = false;
 	
 	QPen m_lassoPen;
 	QPen m_selectedPen;

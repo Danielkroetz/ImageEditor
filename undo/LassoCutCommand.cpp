@@ -9,19 +9,20 @@
 
 // ---------------------- Constructor ----------------------
 LassoCutCommand::LassoCutCommand( LayerItem* originalLayer, LayerItem* newLayer, const QRect& bounds,
-                    const QImage& originalBackup, const int index, QUndoCommand* parent )
+                    const QImage& originalBackup, const int index, const QString& name, QUndoCommand* parent )
         : AbstractCommand(parent),
           m_originalLayer(originalLayer),
           m_newLayer(newLayer),
           m_bounds(bounds),
-          m_backup(originalBackup)
+          m_backup(originalBackup),
+          m_name(name)
 {
   std::cout << "LassoCutCommand::LassoCutCommand(): Processing..." << std::endl;
   {
     newLayer->setPos(bounds.topLeft());
     m_originalLayerId = originalLayer->id();
     m_newLayerId = newLayer->id(); 
-    setText(QString("Lasso %1 Cut").arg(index));
+    setText(QString("%1 Cut").arg(name));
   }
 }
 
@@ -85,6 +86,7 @@ QJsonObject LassoCutCommand::toJson() const
    QJsonObject obj = AbstractCommand::toJson();
    obj["originalLayerId"] = m_originalLayerId;
    obj["newLayerId"] = m_newLayerId;
+   obj["name"] = m_name;
    QJsonObject rectObj;
    rectObj.insert("x", m_bounds.x());
    rectObj.insert("y", m_bounds.y());
@@ -126,9 +128,10 @@ LassoCutCommand* LassoCutCommand::fromJson( const QJsonObject& obj, const QList<
       return nullptr;
     }
     // >>>
+    QString name = obj.value("name").toString("Unknown");
     QJsonObject r = obj["rect"].toObject();
     QRect rect(r["x"].toInt(),r["y"].toInt(),r["width"].toInt(),r["height"].toInt());
     // >>>
-    return new LassoCutCommand(originalLayer,newLayer,rect,newLayer->originalImage(),newLayerId);
+    return new LassoCutCommand(originalLayer,newLayer,rect,newLayer->originalImage(),newLayerId,name);
   }
 }

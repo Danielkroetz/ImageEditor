@@ -3,12 +3,13 @@
 PolygonInsertPointCommand::PolygonInsertPointCommand( EditablePolygon* poly,
                                                      int idx,
                                                      const QPointF& p,
-                                                     QUndoCommand* parent)
-    : AbstractCommand("Insert Polygon Point", parent)
+                                                     QUndoCommand* parent )
+    : AbstractCommand(parent)
     , m_poly(poly)
     , m_idx(idx)
     , m_point(p)
 {
+  setText(QString("Insert polygon point at %1").arg(idx));
 }
 
 void PolygonInsertPointCommand::redo()
