@@ -23,8 +23,10 @@ The ImageEditor application requires **Qt6**. Below is a list of Linux distribut
 | :--- | :--- | :--- | :--- |
 | **Ubuntu 24.10** | Oracular Oriole | ✅ Supported | Qt 6.6.x |
 | **Ubuntu 24.04 LTS**| Noble Numbat | ✅ Supported | Qt 6.4.x |
-| **Ubuntu 22.04 LTS**| Jammy Jellyfish | ✅ Supported | Qt 6.2.4 |
+| **Ubuntu 22.04 LTS**| Jammy Jellyfish | ✅ Supported [^1] | Qt 6.2.4 |
 | **Ubuntu 20.04 LTS**| Focal Fossa | ❌ No | (Qt 5 only) |
+
+[^1]: This version of QT seems to be missing some functionality used in the precompiled version
 
 ### Supported Debian Versions
 | Debian Version | Release Name | Qt6 Support | Native Repo Version |
@@ -60,6 +62,17 @@ brew install qt cmake
 
 *Note: If CMake fails to find Qt, run: export CMAKE_PREFIX_PATH=$(brew --prefix qt)*
 
+### Windows with WSL
+
+* Open the windows command line ([Windows]+[R] --> "cmd" --> [Ok]) and enter`wsl --install Debian`
+* Wait for Download and Installation to finish, at the end you will be asked to create a username and password. Can be the same as Windows or different.
+* After picking a user and password combination the Linux environment will autostart. Now run `sudo apt-get update` and `sudo apt-get install qt6-base-dev qt6-declarative-dev`
+* Leave the Linux environment by entering `exit`
+* Download the precompiled binary from ImageEditor (https://github.com/hmohlberg/ImageEditor/tree/main/bin) and any Images you need
+* To run ImageEditor from the Windows command line:
+  * If you keep the downloaded files in the standard Windows Downloads-folder: `wsl -e 'Downloads/ImageEditor' -f 'Downloads/pm2088o.png`
+  * If you have your own file organization scheme for downloaded files adapt from following absolute paths: `wsl -e '/mnt/c/Path/To/My/Installations/ImageEditor' -f '/mnt/c/Users/ArnoNym/MyDownloadedFiles/pm2088o.png`
+ 
 ---
 
 ## Build Process
