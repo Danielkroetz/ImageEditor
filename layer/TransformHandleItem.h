@@ -11,13 +11,13 @@ public:
 
     enum Role { Scale, Rotate };
 
-    TransformHandleItem(LayerItem* layer, Role role);
+    TransformHandleItem( LayerItem* layer, Role role );
 
 protected:
 
-    void mousePressEvent(QGraphicsSceneMouseEvent*) override;
-    void mouseMoveEvent(QGraphicsSceneMouseEvent*) override;
-    void mouseReleaseEvent(QGraphicsSceneMouseEvent*) override;
+    void mousePressEvent( QGraphicsSceneMouseEvent* ) override;
+    void mouseMoveEvent( QGraphicsSceneMouseEvent* ) override;
+    void mouseReleaseEvent( QGraphicsSceneMouseEvent* ) override;
 
 private:
 

@@ -1,4 +1,5 @@
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -20,7 +21,7 @@
 // ----------------------- Constructor -----------------------
 ImageProcessor::ImageProcessor( const QImage& image ) : m_image(image) 
 {
-  std::cout << "ImageProcessor::ImageProcessor(): Processing..." << std::endl;
+  qDebug() << "ImageProcessor::ImageProcessor(): Processing...";
   { 
    m_skipMainImage = true;
    m_undoStack = new QUndoStack();
@@ -34,9 +35,24 @@ ImageProcessor::ImageProcessor()
 }
 
 // ----------------------- Methods -----------------------
+QString ImageProcessor::saveIntermediate( AbstractCommand *cmd, const QString &name, int step )
+{
+  if ( m_saveIntermediate && cmd != nullptr ) {
+    QString outfilename = QString("%1/%2_%3.png").arg(m_intermediatePath).arg(m_basename).arg(1000+step);
+    LayerItem *layer = cmd->layer();
+    if ( layer != nullptr ) {
+        qInfo() << layer->pos() << " - " << layer->image().rect();
+        layer->image().save(outfilename);
+        return QString("%1 %2 %3\n").arg(1000+step).arg(name).arg(outfilename);
+    }
+  }
+  return "";
+}
+
 void ImageProcessor::buildMainImageLayer() {
   if ( !m_image.isNull() ) {
      LayerItem* newLayer = new LayerItem(m_image);
+     newLayer->setName("MainImage");
      newLayer->setIndex(0);
      newLayer->setParent(nullptr);
      newLayer->setUndoStack(m_undoStack);
@@ -44,9 +60,19 @@ void ImageProcessor::buildMainImageLayer() {
    }
 }
 
+void ImageProcessor::setIntermediatePath( const QString& path, const QString& outname ) 
+{
+    m_intermediatePath = path;
+    if ( outname.length() > 0 ) {
+       QFileInfo fileInfo(outname);
+       m_basename = fileInfo.baseName();
+    }
+    m_saveIntermediate = path.length() > 0 ? true : false;
+}
+
 bool ImageProcessor::process( const QString& filePath ) 
 {
- std::cout << "ImageProcessor::load(): filePath='" << filePath.toStdString() << "'" << std::endl;
+ qDebug() << "ImageProcessor::load(): filePath='" << filePath << "'";
  { 
     QFile f(filePath);
     if ( !f.open(QIODevice::ReadOnly) ) {
@@ -105,6 +131,8 @@ bool ImageProcessor::process( const QString& filePath )
     }
   
     // --- Restore Undo/Redo Stack ---
+    int nStep = 1;
+    QString infoTextLines = "";
     QJsonArray undoArray = root["undoStack"].toArray();
     for ( const QJsonValue& v : undoArray ) {
         QJsonObject cmdObj = v.toObject();
@@ -128,8 +156,22 @@ bool ImageProcessor::process( const QString& filePath )
            qDebug() << "ImageProcessor::load(): Not yet processed.";
         }
         // ggf. weitere Command-Typen hier hinzufügen
-        if ( cmd )
+        if ( cmd ) {
             m_undoStack->push(cmd);
+            infoTextLines += saveIntermediate(cmd,type,nStep);
+        }
+        nStep += 1;
+    }
+    if ( m_saveIntermediate && infoTextLines != "" ) {
+      QString outfilename = QString("%1/%2.info").arg(m_intermediatePath).arg(m_basename);
+      QFile file(outfilename);
+      if ( file.open(QIODevice::WriteOnly | QIODevice::Text) ) {
+        QTextStream out(&file);
+         out << infoTextLines.trimmed();
+        file.close();
+      } else {
+        qWarning() << "Warning: Cannot save info file " << outfilename << ": " << file.errorString();
+      }
     }
     
     // ---  combine layer images ---
@@ -141,6 +183,7 @@ bool ImageProcessor::process( const QString& filePath )
          if ( !overlayImage.isNull() ) {
           int x = layer->pos().x();
           int y = layer->pos().y();
+          qInfo() << " layer=" << layer->name() << ", id=" << layer->id( )<< ", pos=" << layer->pos();
           QPainter painter(&m_outImage);
            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
            painter.drawImage(x,y,overlayImage);
@@ -160,7 +203,7 @@ bool ImageProcessor::process( const QString& filePath )
 // ----------------------- Main image -----------------------
 bool ImageProcessor::setOutputImage( int ident )
 {
-  std::cout << "ImageProcessor::setOutputImage(): ident=" << ident << std::endl;
+  qDebug() << "ImageProcessor::setOutputImage(): ident=" << ident;
   {
      for ( auto* item : m_layers ) {
        auto* layer = dynamic_cast<LayerItem*>(item);
@@ -176,7 +219,7 @@ bool ImageProcessor::setOutputImage( int ident )
 // ----------------------- Misc -----------------------
 void ImageProcessor::printself()
 {
-  std::cout << "ImageProcessor::printself(): Processing..." << std::endl;
+  qDebug() << "ImageProcessor::printself(): Processing...";
   {
     for ( auto* item : m_layers ) {
      auto* layer = dynamic_cast<LayerItem*>(item);

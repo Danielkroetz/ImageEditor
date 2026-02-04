@@ -565,6 +565,7 @@ void MainWindow::showLayerContextMenu( const QPoint& pos )
         if ( !fileName.isEmpty() ) {
           layer->image().save(fileName, "PNG", 80);
           qDebug() << "Saved layer " << layer->name() << " image as " << fileName;
+          qDebug() << "  geometry: " << layer->m_item->boundingRect();
         }
     });
     menu.addAction("Delete Layer", this, &MainWindow::deleteLayer);
@@ -1041,6 +1042,7 @@ void MainWindow::createToolbars()
       else if ( text.startsWith("Scale") ) transformMode = LayerItem::OperationMode::Scale;
       else if ( text.startsWith("Vertical") ) transformMode = LayerItem::OperationMode::Flip;
       else if ( text.startsWith("Horizontal") ) transformMode = LayerItem::OperationMode::Flop;
+      else if ( text.startsWith("Perspective") ) transformMode = LayerItem::OperationMode::Perspective;
       else if ( text.startsWith("Cage transform") ) transformMode = LayerItem::OperationMode::CageWarp;
       m_imageView->setLayerOperationMode(transformMode);
     });

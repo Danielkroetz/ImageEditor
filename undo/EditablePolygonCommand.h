@@ -20,6 +20,8 @@ public:
     
     void setVisible( bool isVisible );
     
+    LayerItem* layer() const override { return m_layer; }
+    
     void undo() override;
     void redo() override;
 

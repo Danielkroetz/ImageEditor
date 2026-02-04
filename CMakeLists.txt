@@ -23,6 +23,7 @@ set(SOURCES
     layer/EditablePolygon.cpp
     layer/EditablePolygonItem.cpp
     layer/TransformHandleItem.cpp
+    layer/PerspectiveTransform.cpp
     layer/MaskLayer.cpp
     layer/MaskLayerItem.cpp
     undo/AbstractCommand.cpp
@@ -60,6 +61,7 @@ set(HEADERS
     layer/EditablePolygon.h
     layer/EditablePolygonItem.h
     layer/TransformHandleItem.h
+    layer/PerspectiveTransform.h
     layer/MaskLayer.h
     layer/MaskLayerItem.h
     undo/AbstractCommand.h

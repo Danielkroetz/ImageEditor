@@ -2,6 +2,22 @@
 
 #include <QPainter>
 #include <QtMath>
+#include <QDebug>
+
+// -------------- Undo / redo  -------------- 
+void MoveLayerCommand::undo() 
+{ 
+  qDebug() << "void MoveLayerCommand::undo(): old_pos =" << m_oldPos;
+  if ( m_layer ) m_layer->setPos(m_oldPos);
+  else qWarning() << "MoveLayerCommand::undo(): Invalid layer";
+}
+
+void MoveLayerCommand::redo()
+{ 
+  qDebug() << "MoveLayerCommand::redo(): old_pos= " << m_oldPos << " -> new_pos =" << m_newPos;
+  if ( m_layer ) m_layer->setPos(m_newPos); 
+  else qWarning() << "MoveLayerCommand::redo(): Invalid layer";
+}
 
 // -------------- history related methods  -------------- 
 QJsonObject MoveLayerCommand::toJson() const
@@ -14,16 +30,6 @@ QJsonObject MoveLayerCommand::toJson() const
    obj["toY"] = m_newPos.y();
    obj["type"] = type();
    return obj;
-  /* 
-   return {
-        {"type", type()},
-        {"layerId", m_layerId},
-        {"fromX", m_oldPos.x()},
-        {"fromY", m_oldPos.y()},
-        {"toX",   m_newPos.x()},
-        {"toY",   m_newPos.y()}
-    };
-    */
 }
 
 MoveLayerCommand* MoveLayerCommand::fromJson( const QJsonObject& obj, const QList<LayerItem*>& layers )

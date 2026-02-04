@@ -3,6 +3,8 @@
 #include "AbstractCommand.h"
 #include "../layer/EditablePolygon.h"
 
+class LayerItem;
+
 class PolygonReduceCommand : public AbstractCommand
 {
 
@@ -11,6 +13,8 @@ public:
                             QUndoCommand* parent = nullptr );
 
     QString type() const override { return "ReducePolygon"; }
+    
+    LayerItem* layer() const override { return nullptr; }
     
     void undo() override;
     void redo() override;

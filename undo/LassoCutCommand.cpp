@@ -30,7 +30,7 @@ LassoCutCommand::LassoCutCommand( LayerItem* originalLayer, LayerItem* newLayer,
 // ---------------------- Undo/Redo ----------------------
 void LassoCutCommand::undo()
 {
-  // std::cout << "LassoCutCommand::undo(): Processing..." << std::endl;
+ qDebug() << "LassoCutCommand::undo(): Processing...";
   {
     QImage tempImage = m_originalLayer->image();
     QPainter p(&tempImage);
@@ -60,7 +60,7 @@ void LassoCutCommand::undo()
     
 void LassoCutCommand::redo()
 {
-  // std::cout << "LassoCutCommand::redo(): Processing..." << std::endl;
+  qDebug() << "LassoCutCommand::redo(): Processing...";
   {
     QColor color = QColor(255,255,255);
     QImage tempImage = m_originalLayer->image();

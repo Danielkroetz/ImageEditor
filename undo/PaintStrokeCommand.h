@@ -19,6 +19,8 @@ public:
     void undo() override;
     void redo() override;
     
+    LayerItem* layer() const override { return m_layer; }
+    
     QJsonObject toJson() const override;
     static PaintStrokeCommand* fromJson( const QJsonObject& obj, const QList<LayerItem*>& layers, QUndoCommand* parent = nullptr );
     static PaintStrokeCommand* fromJson( const QJsonObject& obj, LayerItem* layer );

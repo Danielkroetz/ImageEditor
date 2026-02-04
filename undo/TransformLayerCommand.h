@@ -22,6 +22,7 @@ public:
     );
     
     QString type() const override { return "TransformLayer"; }
+    LayerItem* layer() const override { return m_layer; }
 
     void undo() override;
     void redo() override;

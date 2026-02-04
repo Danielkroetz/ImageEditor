@@ -23,6 +23,7 @@ public:
     virtual ~AbstractCommand() override = default;
 
     // ---- Serialisierung ----
+    virtual LayerItem* layer() const = 0;
     virtual QString type() const = 0;
     virtual QJsonObject toJson() const {
         QJsonObject obj;

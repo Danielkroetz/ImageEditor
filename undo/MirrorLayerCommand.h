@@ -17,6 +17,8 @@ public:
         setText(QString("Mirror %1 Layer %2").arg(planeName).arg(idx));
     }
     
+    LayerItem* layer() const override { return m_layer; }
+    
     QString type() const override { return "MirrorLayer"; }
     void undo() override { if ( m_layer ) m_layer->setMirror(m_mirrorPlane); }
     void redo() override { if ( m_layer ) m_layer->setMirror(m_mirrorPlane); }

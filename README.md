@@ -152,5 +152,3 @@ The codebase automatically handles the transition from mirrored() (older Qt6) to
 #else
     image = image.mirrored(false, true);
 #endif
-
-```

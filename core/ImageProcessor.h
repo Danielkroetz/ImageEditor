@@ -6,6 +6,7 @@
 #include <QUndoStack>
 
 // --- ---
+class AbstractCommand;
 class LayerItem;
 
 // -------------------------- ImageProcessor --------------------------
@@ -19,6 +20,7 @@ public:
     QImage getOutputImage() const { return m_outImage; }
     
     // --------------------------  --------------------------
+    void setIntermediatePath( const QString& path = "", const QString& outname = "" );
     bool setOutputImage( int ident );
     bool process( const QString& filePath );
     void printself();
@@ -26,10 +28,16 @@ public:
     
 private:
 
+    QString saveIntermediate( AbstractCommand *cmd, const QString &name, int step );
+
     bool m_skipMainImage = false;
+    bool m_saveIntermediate = false;
    
     QImage m_image;
     QImage m_outImage;
+    
+    QString m_intermediatePath = "";
+    QString m_basename = "";
     
     QUndoStack* m_undoStack = nullptr;
     

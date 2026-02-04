@@ -8,6 +8,7 @@
 #include <QPen>
 
 #include "CageMesh.h"
+#include "PerspectiveTransform.h"
 
 // ---
 class Layer;
@@ -22,7 +23,7 @@ class LayerItem : public QGraphicsPixmapItem
 public:
 
     enum LayerType { MainImage, LassoLayer };
-    enum OperationMode { None, Info, CageEdit, CageWarp, Translate, Rotate, Scale, Flip, Flop, Perseptive,
+    enum OperationMode { None, Info, CageEdit, CageWarp, Translate, Rotate, Scale, Flip, Flop, Perspective,
                           Select, MovePoint, AddPoint, DeletePoint, TranslatePolygon, Reduce, Smooth, DeletePolygon };
 
     LayerItem( const QPixmap& pixmap, QGraphicsItem* parent = nullptr );
@@ -49,7 +50,6 @@ public:
     void updateCagePoint( TransformHandleItem*, const QPointF& localPos );
     void commitCageTransform( const QVector<QPointF> &cage );
     void beginCageEdit();
-    // void enableCage();
     void disableCage();
     bool cageEnabled() const;
     void setCageVisible( bool isVisible );
@@ -65,6 +65,7 @@ public:
     void setName( const QString& name ) { m_name = name; }
     LayerType getType() const { return m_type; }
     bool hasActiveCage() const { return m_cageEnabled; }
+    PerspectiveTransform& perspective() { return m_perspective; }
     
     void setNumberOfActiveCagePoints( int nControlPoints );
     void setCageWarpRelaxationSteps( int nRelaxationsSteps );
@@ -80,6 +81,8 @@ public:
     void applyTriangleWarp();
     void applyCageWarp();
     void enableCage( int, int );
+    
+    void applyPerspective();
     
     void updateHandles();
     void updateOriginalImage();
@@ -117,10 +120,10 @@ private:
     QVector<QGraphicsItem*> m_handles;
     QVector<QPointF> m_originalCage;
     QVector<QPointF> m_cage;
-    // QVector<CageControlPointItem*> m_points;
     
     CageMesh m_mesh;
     CageOverlayItem* m_cageOverlay = nullptr;
+    PerspectiveTransform m_perspective;
 
 	Layer* m_layer = nullptr;
 	
@@ -137,6 +140,7 @@ private:
 	
 	QPointF m_pressScenePos;
     QTransform m_startTransform;
+    QTransform m_totalTransform;
 	
 	QWidget* m_parent = nullptr;
 	QUndoStack* m_undoStack = nullptr;

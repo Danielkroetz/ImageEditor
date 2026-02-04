@@ -19,7 +19,7 @@
 #include "gui/MainWindow.h"
 
 // ---------------------- Helper ----------------------
-static void showHistory() {
+static void showHistory( int n ) {
     QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/history.json";
     QFile file(path);
     if ( !file.open(QIODevice::ReadOnly) ) {
@@ -27,12 +27,19 @@ static void showHistory() {
         return;
     }
     QJsonArray history = QJsonDocument::fromJson(file.readAll()).array();
-    std::cout << "--- Last calls ---" << std::endl;
+    if ( n > 0 ) {
+      std::cout << "--- Last " << n << " calls ---" << std::endl;
+    } else {
+      std::cout << "--- Last calls ---" << std::endl;
+    }
+    int k = 1;
     for ( const QJsonValue &val : history ) {
         QJsonObject obj = val.toObject();
         std::cout << obj["date"].toString().toStdString() << " | " 
                   << "ImageEditor "
                   << obj["args"].toString().toStdString() << std::endl;
+        k += 1;
+        if ( n > 0 && k > n ) return;
     }
 }
 
@@ -93,6 +100,19 @@ static bool validateFile( const QString &filePath, const QString &optionName, co
   return true;
 }
 
+static bool isPathWritable( const QString &path ) {
+    QFileInfo checkInfo(path);
+    if ( !checkInfo.exists() ) {
+        qDebug() << "Error: Path does not exists: " << path;
+        return false;
+    }
+    if ( !checkInfo.isWritable() ) {
+        qDebug() << "Error: Path is write-protected or no permission: " << path;
+        return false;
+    }
+    return true;
+}
+
 // ---------------------- Command Line Options ----------------------
 static QJsonObject parser( const QCoreApplication *app, int argc ) {
   QJsonObject obj;
@@ -108,21 +128,31 @@ static QJsonObject parser( const QCoreApplication *app, int argc ) {
   parser.addOption(outFileOption);
   QCommandLineOption batchOption("batch", "Run application in batch mode without running graphical user interface.");
   parser.addOption(batchOption);
-  // QCommandLineOption intermediateOption(QStringList() << "save-intermediate", "Save intermediate steps.", "file");
-  // parser.addOption(intermediateOption);
+  QCommandLineOption intermediateOption(QStringList() << "save-intermediate", "In batch mode, path to output an image after each step in the history.", "file");
+  parser.addOption(intermediateOption);
   QCommandLineOption vulkanOption("vulkan", "If available enable hardware accelerated Vulkan rendering.");
   parser.addOption(vulkanOption);
-  QCommandLineOption historyOption("history", "Print history of last calls to stdout.");
+  QCommandLineOption historyOption("history", "Print history of last calls to stdout. Optional: last <n> entries.");
   parser.addOption(historyOption);
   QCommandLineOption forceOption("force", "Overwrite an existing output file.");
   parser.addOption(forceOption);
   parser.process(*app);
   
   // --- history ---
-  if ( parser.isSet(historyOption) && argc == 2 ) {
-   showHistory();
-   exit(1);
+  if ( parser.isSet(historyOption) ) {
+    int n = -1;
+    QStringList positionalArgs = parser.positionalArguments();
+    if ( !positionalArgs.isEmpty() ) {
+        bool ok;
+        int val = positionalArgs.first().toInt(&ok);
+        if ( ok ) {
+            n = val;
+        }
+    }
+    showHistory(n);
+    exit(1);
   }
+  
   // --- Check required options ---
   if ( !parser.isSet(fileOption) && !parser.isSet(projectFileOption) ) {
    qCritical() << "Error: Missing path to image file and history file. Need at least one!";
@@ -140,6 +170,10 @@ static QJsonObject parser( const QCoreApplication *app, int argc ) {
   }
   obj["historyPath"] = parser.value(projectFileOption);
   if ( !validateFile(obj["historyPath"].toString(),"project",{"json"}) ) {
+   exit(1);
+  }
+  obj["save-intermediate"] = parser.value(intermediateOption);
+  if ( parser.isSet(intermediateOption) && !isPathWritable(obj["save-intermediate"].toString()) ) {
    exit(1);
   }
   obj["vulkan"] = parser.isSet(vulkanOption);
@@ -184,11 +218,13 @@ int main( int argc, char *argv[] )
         printError(QString("Output file '%1' already exists. Use command line option --force to overwrite.").arg(outputPath));
         return 1; 
       }
+      QString saveIntermediatePath = parsedOptions.value("save-intermediate").toString("");
       ImageLoader loader;
       QImage image;
       if ( imagePath.isEmpty() ) {
        saveCurrentCall(argc, argv);
        ImageProcessor proc;
+       proc.setIntermediatePath(saveIntermediatePath,outputPath);
        if ( !proc.process(historyPath) ) {
         printError(QString("Malfunction in ImageProcessor::process(%1).").arg(historyPath));
         return 1;
@@ -198,6 +234,7 @@ int main( int argc, char *argv[] )
        if ( loader.load(imagePath,true) ) {
         saveCurrentCall(argc, argv);
         ImageProcessor proc(loader.getImage());
+        proc.setIntermediatePath(saveIntermediatePath,outputPath);
         if ( !proc.process(historyPath) ) {
          printError(QString("Malfunction in ImageProcessor::process(%1).").arg(historyPath));
          return 1;
