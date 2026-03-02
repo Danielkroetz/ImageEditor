@@ -586,7 +586,7 @@ void MainWindow::openHistory()
 {
     QString fileName = QFileDialog::getOpenFileName(this,
                         tr("Open JSON history file"), QString(),
-                        tr("JSON file (*,json)"));
+                        tr("JSON file (*.json)"));
     if ( fileName.isEmpty() )
       return;
     loadHistory(fileName);
