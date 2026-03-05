@@ -239,8 +239,9 @@ void LayerItem::setMirror( int mirrorPlane ) {
 // ------------------------ Transform ------------------------
 void LayerItem::resetTotalTransform()
 {
-  qDebug() << "LayerItem::resetTransform(): Processing...";
+  qDebug() << "LayerItem::resetTotalTransform(): Processing...";
   m_totalTransform = QTransform();
+  setImageTransform(m_totalTransform);
 }
 
 void LayerItem::setImageTransform( const QTransform& transform, bool combine ) {
@@ -608,7 +609,8 @@ void LayerItem::setRotationAngle( double value )
       QString name = "Rotate Layer";
       TransformLayerCommand::LayerTransformType trafoType = TransformLayerCommand::LayerTransformType::Rotate;
       name += QString(" %1").arg(m_index);
-      m_transformLayerCommand = new TransformLayerCommand(this, m_startPos, pos(), m_startTransform, transform(), name, trafoType);
+      // m_startTransform
+      m_transformLayerCommand = new TransformLayerCommand(this, m_startPos, pos(), m_totalTransform, transform(), name, trafoType);
       m_undoStack->push(m_transformLayerCommand);
     }
     // --- update layer ---

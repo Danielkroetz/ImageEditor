@@ -67,6 +67,7 @@
 #include <QDateTime>
 #include <QLineEdit>
 #include <QBuffer>
+#include <QTimer>
 
 #include <iostream>
 
@@ -1702,6 +1703,7 @@ void MainWindow::showMessage( const QString& message, int msgType )
   if ( msgType == 1 ) {
     m_messageLabel->setStyleSheet("QLabel { color : red; font-weight: bold; }");
     m_messageLabel->setText(QString("ERROR: %1").arg(message));
+    QTimer::singleShot(5000, m_messageLabel, &QLabel::clear);
     return;
   }
   m_messageLabel->setStyleSheet("QLabel { color : black; font-weight: bold; }");
