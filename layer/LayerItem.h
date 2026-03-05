@@ -55,7 +55,7 @@ class LayerItem : public QGraphicsPixmapItem
     const QImage& originalImage();
     void updatePixmap();
     void resetPixmap();
-    void resetTotalTransform() { m_totalTransform = QTransform(); }
+    void resetTotalTransform();
     void setFileInfo( const QString& filePath );
     void setImage( const QImage &image );
     void setLayer( Layer *layer );

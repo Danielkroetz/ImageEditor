@@ -229,6 +229,7 @@ void LayerItem::setMirror( int mirrorPlane ) {
       #else
        QImage flippedImage = m_image.mirrored(mirrorPlane == 1 ? Qt::Vertical : Qt::Horizontal);
       #endif
+      m_totalTransform.scale(mirrorPlane == 1 ? +1 : -1,mirrorPlane == 1 ? -1 : +1);
       m_image = flippedImage;
       updatePixmap();
     }
@@ -236,6 +237,12 @@ void LayerItem::setMirror( int mirrorPlane ) {
 }
 
 // ------------------------ Transform ------------------------
+void LayerItem::resetTotalTransform()
+{
+  qDebug() << "LayerItem::rsetTransform(): Processing...";
+  m_totalTransform = QTransform();
+}
+
 void LayerItem::setImageTransform( const QTransform& transform, bool combine ) {
   qCDebug(logEditor) << "LayerItem::setImageTransform(): combine =" << combine;
   {
@@ -249,11 +256,11 @@ void LayerItem::setImageTransform( const QTransform& transform, bool combine ) {
     qDebug() << "LayerItem::setImageTransform(): ALTERNATIVE PROCESS FOR CASE WHERE NO PIXMAP IS AVAILABLE";
     // transform image
     QPointF sceneCenter = mapToScene(QRectF(pixmap().rect()).center());
-    QPointF imageCenter = QRectF(m_image.rect()).center(); // m_originalImage
+    QPointF imageCenter = QRectF(m_originalImage.rect()).center();
     m_totalTransform.translate(imageCenter.x(), imageCenter.y());
     m_totalTransform *= transform; // This is my actual rotation
     m_totalTransform.translate(-imageCenter.x(), -imageCenter.y());
-    m_image = m_image.transformed(m_totalTransform, Qt::SmoothTransformation);  // m_originalImage
+    m_image = m_originalImage.transformed(m_totalTransform, Qt::SmoothTransformation);
     QPointF newImageCenter(m_image.width() / 2.0, m_image.height() / 2.0);
     setPos(sceneCenter - newImageCenter);
     // reset transform
