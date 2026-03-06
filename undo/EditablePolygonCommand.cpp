@@ -17,6 +17,7 @@
 
 #include "EditablePolygonCommand.h"
 
+#include "../gui/MainWindow.h"
 #include "../undo/PolygonMovePointCommand.h"
 #include "../core/Config.h"
 
@@ -47,10 +48,20 @@ EditablePolygonCommand::EditablePolygonCommand( LayerItem *layer, QGraphicsScene
       "<circle cx='10' cy='40' r='3' fill='white'/>"
       "</svg>";
     setIcon(AbstractCommand::getIconFromSvg(polygonSvg));
+    printMessage();
   }
 }
 
 // ------------------------ Methods ------------------------
+void EditablePolygonCommand::printMessage( bool isUndo )
+{
+  if ( isUndo ) {
+     MainWindow::instance()->showMessage(QString("Deleted polygon %1").arg(m_name)); 
+  } else {
+     MainWindow::instance()->showMessage(QString("Created polygon %1").arg(m_name));
+  }
+}
+
 void EditablePolygonCommand::setName( const QString& name )
 {
   qCDebug(logEditor) << "EditablePolygonCommand::setName(): name =" << name;
@@ -110,6 +121,7 @@ void EditablePolygonCommand::redo()
       if ( !m_item->scene() )
         m_scene->addItem(m_item);
     }
+    printMessage();
    }
 }
 
@@ -117,11 +129,13 @@ void EditablePolygonCommand::undo()
 {
   qCDebug(logEditor) << "EditablePolygonCommand::undo(): Processing...";
   {
-    if ( m_item && m_item->scene() ) {
+    if ( !(m_item && m_item->scene()) ) return;
+    m_scene->removeItem(m_item);
+    printMessage(true);
     //  INTRODUCED TO HANDLE CRASH EVENT: if ( !m_item->parentItem() ) {
-        m_scene->removeItem(m_item);
+    //    m_scene->removeItem(m_item);
     //  }
-    }
+    // }
   }
 }
 

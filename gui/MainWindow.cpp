@@ -1489,7 +1489,7 @@ void MainWindow::createToolbars()
     connect(m_rotationLayerAngleSpin, &QDoubleSpinBox::valueChanged, m_imageView, [this](double value){
       LayerItem *layer = m_imageView->getSelectedItem();
       if ( layer ) layer->setRotationAngle(value);
-      else showMessage("No image layer selected.",1);
+      else showMessage("Rotation failed. No image layer selected.",1);
     });
     m_rotateLayerToolbar->addWidget(m_rotationLayerAngleSpin);
     m_rotateLayerToolbar->setVisible(false);
@@ -1701,13 +1701,13 @@ void MainWindow::createToolbars()
 void MainWindow::showMessage( const QString& message, int msgType )
 {
   if ( msgType == 1 ) {
-    m_messageLabel->setStyleSheet("QLabel { color : red; font-weight: bold; }");
-    m_messageLabel->setText(QString("ERROR: %1").arg(message));
-    QTimer::singleShot(5000, m_messageLabel, &QLabel::clear);
-    return;
+     m_messageLabel->setStyleSheet("QLabel { color : red; font-weight: bold; }");
+     m_messageLabel->setText(QString("ERROR: %1").arg(message));
+  } else {
+     m_messageLabel->setStyleSheet("QLabel { color : yellow; font-weight: normal; }");
+     m_messageLabel->setText(message);
   }
-  m_messageLabel->setStyleSheet("QLabel { color : black; font-weight: bold; }");
-  m_messageLabel->setText(message);
+  // QTimer::singleShot(5000, m_messageLabel, &QLabel::clear);
 }
 
 void MainWindow::createStatusbar()

@@ -16,11 +16,14 @@
 */
 
 #include "CageWarpCommand.h"
+
+#include "../gui/MainWindow.h"
 #include "../layer/LayerItem.h"
 #include "../core/Config.h"
+
 #include <iostream>
 
-// ---------------------- JSON ----------------------
+// ---------------------- Constructor ----------------------
 CageWarpCommand::CageWarpCommand( LayerItem* layer,
            const QVector<QPointF>& before, const QVector<QPointF>& after, const QRectF& rect,
            int rows, int columns, QUndoCommand* parent )
@@ -42,9 +45,19 @@ CageWarpCommand::CageWarpCommand( LayerItem* layer,
       "<circle cx='32' cy='32' r='3' fill='#007acc'/>"
       "</svg>";
    setIcon(AbstractCommand::getIconFromSvg(warpLayerSvg));
+   printMessage();
 }
 
-// 
+// ---------------------- Methods ----------------------
+void CageWarpCommand::printMessage( bool isUndo )
+{
+  if ( isUndo ) {
+     MainWindow::instance()->showMessage(QString("Undo cage warp of layer %1").arg(m_layerId));
+  } else {
+     MainWindow::instance()->showMessage(QString("Cage warp of layer %1").arg(m_layerId));
+  }
+}
+
 void CageWarpCommand::pushNewWarpStep( const QVector<QPointF>& points )
 {
   qCDebug(logEditor) << "CageWarpCommand::pushNewWarpStep(): Processing...";
@@ -68,6 +81,7 @@ void CageWarpCommand::undo()
     // ??? m_layer->applyTriangleWarp();
     m_layer->setCageVisible(LayerItem::OperationMode::CageWarp,false);
     m_layer->resetPixmap(); // holt das originale image
+    printMessage(true);
   }
 }
 
@@ -88,7 +102,7 @@ void CageWarpCommand::redo()
     
     m_layer->setCageVisible(LayerItem::OperationMode::CageWarp,true);
     m_layer->applyTriangleWarp();
-    
+    printMessage();
   }
 }
 

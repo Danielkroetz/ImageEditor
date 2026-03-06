@@ -46,9 +46,10 @@ class TransformLayerCommand : public AbstractCommand
     
     AbstractCommand* clone() const override { return new TransformLayerCommand(m_layer, m_oldPos, m_newPos, m_oldTransform, m_newTransform, m_name); }
     
-    void setRotationAngle( double rotation ) { m_rotationAngle = rotation; }
+    void printMessage( bool isUndo=false );
+    void setRotationAngle( double rotation );
     double rotationAngle() const { return m_rotationAngle; }
-    void setTransform( const QTransform& transform ) { m_newTransform = transform; } 
+    void setTransform( const QTransform& transform );
     QString type() const override { return "TransformLayer"; }
     LayerItem* layer() const override { return m_layer; }
     LayerTransformType trafoType() const { return m_trafoType; } 
@@ -56,6 +57,7 @@ class TransformLayerCommand : public AbstractCommand
 
     void undo() override;
     void redo() override;
+    
     bool mergeWith( const QUndoCommand *other ) override;
     
     QJsonObject toJson() const override;
@@ -75,5 +77,6 @@ class TransformLayerCommand : public AbstractCommand
     
     QTransform m_oldTransform;
     QTransform m_newTransform;
+    QTransform m_totalTransform;
     
 };

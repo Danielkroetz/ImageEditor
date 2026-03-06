@@ -17,9 +17,11 @@
 
 #include "PerspectiveWarpCommand.h"
 
+#include "../gui/MainWindow.h"
 #include "../core/Config.h"
 #include "../layer/LayerItem.h"
 
+// -------------- Constructor --------------
 PerspectiveWarpCommand::PerspectiveWarpCommand(
        LayerItem* layer, const QVector<QPointF>& before, const QVector<QPointF>& after, QUndoCommand* parent )
     : AbstractCommand(parent)
@@ -41,16 +43,17 @@ PerspectiveWarpCommand::PerspectiveWarpCommand(
       "<path d='M6 16 l4 4 m0-4 l-4 4' stroke='#007aff' stroke-width='1.5' stroke-linecap='round'/>"
       "</svg>";
     setIcon(AbstractCommand::getIconFromSvg(perspectiveWarpSvg));
+    printMessage();
 }
 
-void PerspectiveWarpCommand::undo()
+// -------------- Methods --------------
+void PerspectiveWarpCommand::printMessage( bool isUndo )
 {
-    apply(m_before);
-}
-
-void PerspectiveWarpCommand::redo()
-{
-    apply(m_after);
+  if ( isUndo ) {
+     MainWindow::instance()->showMessage(QString("Undo perspective warp of layer %1").arg(m_layerId));
+  } else {
+     MainWindow::instance()->showMessage(QString("Perspective warp of layer %1").arg(m_layerId));
+  }
 }
 
 void PerspectiveWarpCommand::apply( const QVector<QPointF>& quad )
@@ -67,6 +70,20 @@ void PerspectiveWarpCommand::apply( const QVector<QPointF>& quad )
   }
 }
 
+// -------------- Undo / redo --------------
+void PerspectiveWarpCommand::undo()
+{
+    apply(m_before);
+    printMessage(true);
+}
+
+void PerspectiveWarpCommand::redo()
+{
+    apply(m_after);
+    printMessage();
+}
+
+// -------------- History --------------
 QJsonObject PerspectiveWarpCommand::toJson() const
 {
     QJsonObject obj = AbstractCommand::toJson();

@@ -43,6 +43,8 @@ class EditablePolygonCommand : public AbstractCommand
     EditablePolygon* model() const { return m_model; }
     const QPolygonF& polygon() const { return m_polygon; }
     
+    void printMessage( bool isUndo=false );
+    
     void setVisible( bool isVisible );
     void setSelected( bool isSelected );
     void setColor( const QColor& color );

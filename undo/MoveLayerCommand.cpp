@@ -17,6 +17,7 @@
 
 #include "MoveLayerCommand.h"
 #include "../core/Config.h"
+#include "../gui/MainWindow.h"
 
 #include <QPainter>
 #include <QtMath>
@@ -35,27 +36,44 @@ MoveLayerCommand::MoveLayerCommand( LayerItem* layer, const QPointF& oldPos, con
       "fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/>"
       "</svg>";
     setIcon(AbstractCommand::getIconFromSvg(moveLayerSvg));
+    printMessage();
+}
+
+void MoveLayerCommand::printMessage( bool isUndo )
+{
+  if ( isUndo ) {
+    MainWindow::instance()->showMessage(QString("Moved layer %1 from position (%2:%3) to position (%4:%5)").arg(m_layerId).
+                               arg(qRound(m_newPos.x())).arg(qRound(m_newPos.y())).arg(qRound(m_oldPos.x())).arg(qRound(m_oldPos.y())));
+  } else {
+    MainWindow::instance()->showMessage(QString("Moved layer %1 from position (%2:%3) to position (%4:%5)").arg(m_layerId).
+                               arg(qRound(m_oldPos.x())).arg(qRound(m_oldPos.y())).arg(qRound(m_newPos.x())).arg(qRound(m_newPos.y())));
+  }
 }
 
 // -------------- Merge  -------------- 
 bool MoveLayerCommand::mergeWith( const QUndoCommand* other )
 {
+  qDebug() << "MoveLayerCommand::mergeWith(): Processing...";
+  {
    if ( other->id() != id() )
         return false;
     auto* cmd = static_cast<const MoveLayerCommand*>(other);
     if ( cmd->m_layer != m_layer )
         return false;
     m_newPos = cmd->m_newPos;
+    printMessage();
     return true;
+  }
 }
 
-// -------------- Undo / redo  -------------- 
+// -------------- Undo / redo -------------- 
 void MoveLayerCommand::undo() 
 { 
   qCDebug(logEditor) << "MoveLayerCommand::undo(): old_pos =" << m_oldPos;
   {
-    if ( m_layer ) m_layer->setPos(m_oldPos);
-    else qWarning() << "MoveLayerCommand::undo(): Invalid layer";
+    if ( !m_layer ) return;
+    m_layer->setPos(m_oldPos);
+    printMessage(true);
   }
 }
 
@@ -63,13 +81,13 @@ void MoveLayerCommand::redo()
 { 
   qCDebug(logEditor) << "MoveLayerCommand::redo(): old_pos= " << m_oldPos << " -> new_pos =" << m_newPos;
   {
-    if ( m_silent ) return;
-    if ( m_layer ) m_layer->setPos(m_newPos); 
-    else qWarning() << "MoveLayerCommand::redo(): Invalid layer";
+    if ( m_silent || !m_layer ) return;
+    m_layer->setPos(m_newPos); 
+    printMessage();
   }
 }
 
-// -------------- history related methods  -------------- 
+// -------------- history related methods -------------- 
 QJsonObject MoveLayerCommand::toJson() const
 {
    QJsonObject obj = AbstractCommand::toJson();

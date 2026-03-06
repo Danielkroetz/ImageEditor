@@ -62,7 +62,7 @@ class MainWindow : public QMainWindow
     void updateLayerOperationParameter( int mode, double value );
     double getLayerOperationParameter( int mode );
     QString getSelectedLayerItemName() const { return m_selectedLayerItemName; }
-    void showMessage( const QString& message, int msgType );
+    void showMessage( const QString& message, int msgType=0 );
     
  protected:
 

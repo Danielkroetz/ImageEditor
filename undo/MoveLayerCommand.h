@@ -36,6 +36,7 @@ public:
     LayerItem* layer() const override { return m_layer; }
     int id() const override { return 1005; }
     bool mergeWith( const QUndoCommand* other ) override;
+    void printMessage( bool isUndo=false );
     
     void undo() override;
     void redo() override;

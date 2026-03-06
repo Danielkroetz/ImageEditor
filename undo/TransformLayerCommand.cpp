@@ -17,7 +17,9 @@
 
 #include "TransformLayerCommand.h"
 
+#include "../gui/MainWindow.h"
 #include "../layer/LayerItem.h"
+
 #include <iostream>
 
 // -------------------------------- Constructor --------------------------------
@@ -36,6 +38,7 @@ TransformLayerCommand::TransformLayerCommand( LayerItem* layer,
   qDebug() << "TransformLayerCommand::TransformLayerCommand(): trafotype =" << m_trafoType << ", name =" << m_name;
   {
     m_layerId = layer->id();
+    m_totalTransform = m_newTransform;
     setText(name);
     if ( m_trafoType == LayerTransformType::Rotate ) {
       QByteArray rotateLayerSvg = 
@@ -60,7 +63,8 @@ TransformLayerCommand::TransformLayerCommand( LayerItem* layer,
         "<circle cx='54' cy='32' r='2.5' fill='#ffffff'/>"
         "</svg>";
       setIcon(AbstractCommand::getIconFromSvg(scaleAxesLayerSvg));
-    } 
+    }
+    printMessage();
   }
 }
 
@@ -73,6 +77,8 @@ TransformLayerCommand::TransformLayerCommand( LayerItem* layer, const QTransform
 {
   qDebug() << "TransformLayerCommand::TransformLayerCommand(): Base...";
   {
+    m_totalTransform = m_newTransform;
+    m_trafoType = LayerTransformType::Scale;
     m_layerId = layer->id();
     m_name = QString("Scale Transform Layer %1").arg(m_layerId);
     setText(m_name);
@@ -90,7 +96,32 @@ TransformLayerCommand::TransformLayerCommand( LayerItem* layer, const QTransform
       "<circle cx='54' cy='32' r='2.5' fill='#ffffff'/>"
       "</svg>";
     setIcon(AbstractCommand::getIconFromSvg(scaleAxesLayerSvg));
+    printMessage();
   }
+}
+
+void TransformLayerCommand::printMessage( bool isUndo )
+{
+  if ( m_trafoType == LayerTransformType::Scale ) {
+    MainWindow::instance()->showMessage(QString("Scaled layer %1 by (%2:%3)").arg(m_layerId).
+                               arg(m_totalTransform.m11()).arg(m_totalTransform.m22()));
+  } else if ( m_trafoType == LayerTransformType::Rotate ) {
+    MainWindow::instance()->showMessage(QString("Rotated layer %1 by %2 degrees").arg(m_layerId)
+                     .arg( isUndo ? -m_rotationAngle : m_rotationAngle));
+  } else {
+    MainWindow::instance()->showMessage(QString("Invalid trafoType %1 for layer %2").arg(m_trafoType).arg(m_layerId),1);
+  }
+}
+
+void TransformLayerCommand::setTransform( const QTransform& transform ) 
+{ 
+  m_newTransform = transform; 
+} 
+
+void TransformLayerCommand::setRotationAngle( double rotation ) 
+{ 
+  m_rotationAngle = rotation; 
+  printMessage();
 }
 
 // -------------------------------- Merge transforms --------------------------------
@@ -117,6 +148,8 @@ void TransformLayerCommand::undo()
     if ( m_trafoType == LayerTransformType::Scale ) {
       m_layer->setCageVisible(LayerItem::OperationMode::Scale,false);
     }
+    m_totalTransform = QTransform();
+    printMessage(true);
   }
 }
 
@@ -125,10 +158,12 @@ void TransformLayerCommand::redo()
   qDebug() << "TransformLayerCommand::redo(): m_newTransform =" << m_newTransform;
   {
     if ( m_silent || !m_layer ) return;
+    m_totalTransform *= m_newTransform;
     m_layer->setImageTransform(m_newTransform);
     if ( m_trafoType == LayerTransformType::Scale ) {
       m_layer->setCageVisible(LayerItem::OperationMode::Scale,true);
     }
+    printMessage();
   }
 }
 

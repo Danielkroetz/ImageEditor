@@ -221,7 +221,7 @@ void LayerItem::setIsSelected( bool isSelected )
 
 // ------------------------ Mirror ------------------------
 void LayerItem::setMirror( int mirrorPlane ) {
-  qCDebug(logEditor) << "LayerItem::setMirror(): mirrorPlane=" << mirrorPlane;
+  qDebug() << "LayerItem::setMirror(): mirrorPlane=" << mirrorPlane;
   {
     if ( mirrorPlane > 0 ) {
       #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)

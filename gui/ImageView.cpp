@@ -97,7 +97,9 @@ ImageView::ImageView( QWidget* parent ) : QGraphicsView(parent),
     connect(m_undoStack, &QUndoStack::indexChanged, this, [this](int currentIndex) {
       // *** have to go to all commands between last and current index ***
       // qDebug() << "ImageView::ImageView(): lastIndex =" << m_lastIndex << ", currentIndex =" << currentIndex;
-      if ( currentIndex > 0 ) {
+      if ( currentIndex == 0 ) {
+        MainWindow::instance()->showMessage(QString("Initial state"));
+      } else if ( currentIndex > 0 ) {
         const QUndoCommand* justFinishedCommand = m_undoStack->command(currentIndex - 1);
         if ( justFinishedCommand != nullptr ) {
           // qDebug() << "Just finished command :" << justFinishedCommand->text();

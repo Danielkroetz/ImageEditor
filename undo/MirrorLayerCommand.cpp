@@ -17,6 +17,8 @@
 
 #include "MirrorLayerCommand.h"
 
+#include "../gui/MainWindow.h"
+
 #include <QPainter>
 #include <QtMath>
 
@@ -47,19 +49,39 @@ MirrorLayerCommand::MirrorLayerCommand( LayerItem* layer, const int idx, int mir
        "</svg>";
      setIcon(AbstractCommand::getIconFromSvg(horizontalFlipSvg));
     }
+    printMessage();
+}
+
+void MirrorLayerCommand::printMessage( bool isUndo )
+{
+  if ( m_mirrorPlane == 2 ) {
+     MainWindow::instance()->showMessage(QString("Mirrored layer %1 horizontally").arg(m_layerId));
+  } else if ( m_mirrorPlane == 1 ) {
+     MainWindow::instance()->showMessage(QString("Mirrored layer %1 vertically").arg(m_layerId));
+  } else {
+     MainWindow::instance()->showMessage(QString("Invalid mirror plane for layer %1").arg(m_layerId),1);
+  }
 }
 
 // -------------- Undo/Redo  -------------- 
 void MirrorLayerCommand::undo()
 {
   qCDebug(logEditor)  << "MirrorLayerCommand::undo(): Processing...";
-  if ( m_layer && m_isMirroring ) m_layer->setMirror(m_mirrorPlane); 
+  {
+    if ( !(m_layer && m_isMirroring) ) return; 
+    m_layer->setMirror(m_mirrorPlane);
+    printMessage(true);
+  }
 }
 
 void MirrorLayerCommand::redo()
 {
   qCDebug(logEditor) << "MirrorLayerCommand::redo(): Processing...";
-  if ( m_layer && !m_silent && m_isMirroring ) m_layer->setMirror(m_mirrorPlane);
+  {
+    if ( !(m_layer && !m_silent && m_isMirroring) ) return; 
+    m_layer->setMirror(m_mirrorPlane);
+    printMessage();
+  }
 }
  
 // -------------- Merge  --------------    

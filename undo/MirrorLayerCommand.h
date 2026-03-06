@@ -39,6 +39,8 @@ class MirrorLayerCommand : public AbstractCommand
     QString type() const override { return "MirrorLayer"; }
     bool mergeWith( const QUndoCommand* other ) override;
     
+    void printMessage( bool isUndo=false );
+    
     void undo() override;
     void redo() override;
     
@@ -47,11 +49,11 @@ class MirrorLayerCommand : public AbstractCommand
 
   private:
 
-    int m_layerId;
-    int m_mirrorPlane;
+    int m_layerId = -1;
+    int m_mirrorPlane = 0;
     
     bool m_isMirroring;
     
-    LayerItem* m_layer;
+    LayerItem* m_layer = nullptr;
     
 };
