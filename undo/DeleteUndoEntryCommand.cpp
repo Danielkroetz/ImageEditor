@@ -25,6 +25,8 @@
 DeleteUndoEntryCommand::DeleteUndoEntryCommand( QUndoStack* stack, const QString& name, int layerId, QUndoCommand* parent ) 
         : AbstractCommand(parent), m_stack(stack), m_name(name), m_layerId(layerId)
 {
+  qCDebug(logEditor) << "DeleteUndoEntryCommand::DeleteUndoEntryCommand(): Processing...";
+  {
     setText(QString("Delete command %1").arg(name));
     QByteArray deleteCommandSvg = 
       "<svg viewBox='0 0 64 64'>"
@@ -38,6 +40,7 @@ DeleteUndoEntryCommand::DeleteUndoEntryCommand( QUndoStack* stack, const QString
         );
     }
     printMessage();
+  }
 }
 
 void DeleteUndoEntryCommand::printMessage( bool isUndo )
@@ -82,8 +85,10 @@ QJsonObject DeleteUndoEntryCommand::toJson() const
    return obj;
 }
 
-DeleteUndoEntryCommand* DeleteUndoEntryCommand::fromJson( const QJsonObject& obj, const QList<LayerItem*>& layers )
+DeleteUndoEntryCommand* DeleteUndoEntryCommand::fromJson( QUndoStack* stack, const QJsonObject& obj, const QList<LayerItem*>& layers )
 {
+  qCDebug(logEditor) << "DeleteUndoEntryCommand::fromJson(): Processing...";
+  {
     const int layerId = obj["layerId"].toInt(-1);
     LayerItem* layer = nullptr;
     for ( LayerItem* l : layers ) {
@@ -97,5 +102,6 @@ DeleteUndoEntryCommand* DeleteUndoEntryCommand::fromJson( const QJsonObject& obj
       return nullptr;
     }
     QString name = obj.value("name").toString("Unknown");
-    return new DeleteUndoEntryCommand(nullptr,name,layerId);
+    return new DeleteUndoEntryCommand(stack,name,layerId);
+  }
 }

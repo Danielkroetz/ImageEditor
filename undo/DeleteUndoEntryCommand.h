@@ -41,7 +41,7 @@ class DeleteUndoEntryCommand : public AbstractCommand
     void printMessage( bool isUndo=false );
     
     QJsonObject toJson() const override;
-    static DeleteUndoEntryCommand* fromJson( const QJsonObject& obj, const QList<LayerItem*>& layers );
+    static DeleteUndoEntryCommand* fromJson( QUndoStack* stack, const QJsonObject& obj, const QList<LayerItem*>& layers );
 
  private:
  

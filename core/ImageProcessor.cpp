@@ -30,6 +30,7 @@
 #include "../undo/PaintStrokeCommand.h"
 #include "../undo/PerspectiveWarpCommand.h"
 #include "../undo/TransformLayerCommand.h"
+#include "../undo/DeleteUndoEntryCommand.h"
 #include "../undo/LassoCutCommand.h"
 #include "../undo/MirrorLayerCommand.h"
 #include "../undo/MoveLayerCommand.h"
@@ -174,6 +175,8 @@ bool ImageProcessor::process( const QString& filePath )
            cmd = TransformLayerCommand::fromJson(cmdObj, m_layers);
         } else if ( type == "PerspectiveWarp" || type == "PerspectiveWarpCommand" ) {
            cmd = PerspectiveWarpCommand::fromJson(cmdObj, m_layers);
+        } else if ( type == "DeleteUndoEntry" || type == "DeleteUndoEntryCommand" ) {
+           cmd = DeleteUndoEntryCommand::fromJson(m_undoStack, cmdObj, m_layers);
         } else {
            qDebug() << LogColor::Red << "ImageProcessor::load(): Command " << type << " not yet processed." << LogColor::Reset;
         }
@@ -181,6 +184,8 @@ bool ImageProcessor::process( const QString& filePath )
         if ( cmd ) {
             m_undoStack->push(cmd);
             infoTextLines += saveIntermediate(cmd,type,nStep);
+        } else {
+            qDebug() << LogColor::Red << "ImageProcessor::load(): Invalid command." << LogColor::Reset;
         }
         nStep += 1;
     }

@@ -478,36 +478,38 @@ bool MainWindow::loadProject( const QString& filePath, bool skipMainImage )
         QString text = cmdObj["text"].toString();
         // qDebug() << "MainWindow::loadProject(): Found undo call: type=" << type << ", text=" << text;
         AbstractCommand* cmd = nullptr;
-        if ( type == "PaintStrokeCommand" ) {
+        if ( type == "PaintStroke" || type == "PaintStrokeCommand" ) {
            cmd = PaintStrokeCommand::fromJson(cmdObj, layers);
-        } else if ( type == "LassoCutCommand" ) {
+        } else if ( type == "LassoCut" || type == "LassoCutCommand" ) {
            cmd = LassoCutCommand::fromJson(cmdObj, layers);
            LassoCutCommand* cutCommand = dynamic_cast<LassoCutCommand*>(cmd);
            if ( cutCommand != nullptr ) {
              cutCommand->setController(editablePolyCommand);
            }
            boundingBoxLayerMap.insert(cutCommand->layerId(),cutCommand->rect());
-        } else if ( type == "MoveLayer" ) {
+        } else if ( type == "MoveLayer" || type == "MoveLayerCaommnd" ) {
            cmd = MoveLayerCommand::fromJson(cmdObj, layers);
-        } else if ( type == "MirrorLayer" ) {
+        } else if ( type == "MirrorLayer" || type == "MirrorLayerCommand" ) {
            cmd = MirrorLayerCommand::fromJson(cmdObj, layers);
-        } else if ( type == "CageWarp" ) {
+        } else if ( type == "CageWarp" || type == "CageWarpCommand" ) {
            cmd = CageWarpCommand::fromJson(cmdObj, layers);
         } else if ( type == "TransformLayer" || type == "TransformLayerCommand" ) {
            cmd = TransformLayerCommand::fromJson(cmdObj, layers);
-        } else if ( type == "PerspectiveTransform" ) {
+        } else if ( type == "PerspectiveTransform" || type == "PerspectiveTransformCommand" ) {
            // cmd = PerspectiveTransformCommand::fromJson(cmdObj, layers);
-        } else if ( type == "PerspectiveWarp" ) {
+        } else if ( type == "PerspectiveWarp" || type == "PerspectiveWarpCommand" ) {
            cmd = PerspectiveWarpCommand::fromJson(cmdObj, layers);
-        } else if ( type == "EditablePolygonCommand" ) {
+        } else if ( type == "EditablePolygon" || type == "EditablePolygonCommand" ) {
            cmd = EditablePolygonCommand::fromJson(cmdObj, layers);
            editablePolyCommand = dynamic_cast<EditablePolygonCommand*>(cmd);
            int npolygons = m_imageView->pushEditablePolygon(editablePolyCommand->model());
            if ( editablePolyCommand->childLayerId() == -1 || npolygons < 0 ) {
              editablePolygonCommands.push_back(editablePolyCommand);
            }
+        } else if ( type == "DeleteUndoEntry" || type == "DeleteUndoEntryCommand" ) {
+            cmd = DeleteUndoEntryCommand::fromJson(undoStack, cmdObj, layers);
         } else {
-           qCDebug(logEditor) << "MainWindow::loadProject(): " << type << " not yet processed.";
+           qDebug() << LogColor::Red << "MainWindow::loadProject(): " << type << " not yet processed."  << LogColor::Reset;
         }
         // ggf. weitere Command-Typen hier hinzufügen
         if ( cmd )

@@ -29,6 +29,7 @@
 #include "LassoCutCommand.h"
 #include "TransformLayerCommand.h"
 #include "EditablePolygonCommand.h"
+#include "DeleteUndoEntryCommand.h"
 
 // >>>
 #include <QDebug>
@@ -68,24 +69,26 @@ AbstractCommand* AbstractCommand::fromJson( const QJsonObject& obj, const QList<
     }
     const QString type = obj["type"].toString();
     // ---- Dispatch nach Command-Typ ----
-    if ( type == "MoveLayer" )
+    if ( type == "MoveLayer" || type == "MoveLayerCommand" )
         return MoveLayerCommand::fromJson(obj,layers);
     if ( type == "Paint" )
         return nullptr;
-    if ( type == "LassoCut" )
+    if ( type == "LassoCut" || type == "LassoCutCommand" )
         return nullptr;
-    if ( type == "PaintStroke" )
+    if ( type == "PaintStroke" || type == "PaintStrokeCommand" )
         return PaintStrokeCommand::fromJson(obj,layers);
-    if ( type == "InvertLayer" )
+    if ( type == "InvertLayer" || type == "InvertLayerCommand" )
         return InvertLayerCommand::fromJson(obj,layers);
-    if ( type == "CageWarp" )
+    if ( type == "CageWarp" ||  type == "CageWarpCommand" )
         return CageWarpCommand::fromJson(obj,layers);
-    if ( type == "LassoCut" )
+    if ( type == "LassoCut" || type == "LassoCutCommand" )
         return LassoCutCommand::fromJson(obj,layers);
-    if ( type == "TransformLayer" )
+    if ( type == "TransformLayer" || type == "TransformLayerCommand" )
     	return TransformLayerCommand::fromJson(obj,layers);
     if ( type == "EditablePolygonCommand" )
         return EditablePolygonCommand::fromJson(obj,layers);
+    if ( type == "DeleteUndoEntry" )
+        return DeleteUndoEntryCommand::fromJson(nullptr,obj,layers);
     qWarning() << "AbstractCommand::fromJson(): Unprocessed command type: " << type;
     return nullptr;
 }
