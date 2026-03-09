@@ -760,6 +760,7 @@ void ImageView::mousePressEvent( QMouseEvent* event )
         }
       }
       if ( clickedItem ) {
+        IMainSystem::instance()->showMessage(QString("Selected layer %1").arg(clickedItem->name()));
         clickedItem->setOperationMode(m_layerOperationMode);
         mainWindow->setSelectedLayer(QString("Layer %1").arg(clickedItem->id()));
         if ( clickedItem->isSelected() == true ) {

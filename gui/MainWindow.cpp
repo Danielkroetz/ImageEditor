@@ -404,10 +404,6 @@ bool MainWindow::loadProject( const QString& filePath, bool skipMainImage )
     QJsonObject root = doc.object();
     
     // --- 1. Clear current scene ---
-// **** THIS clears everything **** 
-//    m_imageView->getScene()->clear();
-//    m_imageView->clearLayers();
-// **** ---------------------- ****
     QUndoStack* undoStack = m_imageView->undoStack();
     undoStack->clear();
     
@@ -549,26 +545,6 @@ bool MainWindow::loadProject( const QString& filePath, bool skipMainImage )
         }
       }
     }
-    
-    /** --- best-match search ---
-    if ( editablePolygonCommands.size() > 0 ) {
-      // qDebug() << "WARNING: Found errors in " << editablePolygonCommands.size() << " editable polygons";
-      for ( int i=0 ; i<editablePolygonCommands.size() ; i++ ) {
-        QRectF polyBox = editablePolygonCommands[i]->polygon().boundingRect();
-        // qDebug() << " polygon: childLayerId =" << editablePolygonCommands[i]->childLayerId() << ", name =" << editablePolygonCommands[i]->name() << ", rect =" << polyBox;
-        QHashIterator<int, QRectF> ibt(boundingBoxLayerMap);
-        while ( ibt.hasNext() ) {
-         ibt.next();
-         if ( polyBox.intersects(ibt.value()) ) {
-           // qDebug() << "  + found match for layer " << ibt.key();
-           editablePolygonCommands[i]->setChildLayerId(ibt.key());
-           editablePolygonCommands[i]->setName(QString("Polygon %1").arg(ibt.key()));
-           // qDebug() << QJsonDocument(editablePolygonCommands[i]->toJson()).toJson(QJsonDocument::Indented);
-         }
-        }
-      }
-    }
-    */
     
     // --- 5. set clean flag in undo stack ---
     m_imageView->undoStack()->setClean();
